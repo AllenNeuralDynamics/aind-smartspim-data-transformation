@@ -1,0 +1,12 @@
+Bootstrap: docker
+From: python:3.10-bullseye
+Stage: build
+
+%setup
+    # Copy project directory into container
+    cp -R . ${SINGULARITY_ROOTFS}/aind-smartspim-data-transformation
+
+%post
+    cd ${SINGULARITY_ROOTFS}/aind-smartspim-data-transformation
+    pip install . --no-cache-dir
+    rm -rf ${SINGULARITY_ROOTFS}/aind-smartspim-data-transformation

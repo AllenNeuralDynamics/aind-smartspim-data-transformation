@@ -1,0 +1,236 @@
+"""Module to handle ephys data compression"""
+
+import logging
+import os
+import platform
+import shutil
+import sys
+from datetime import datetime
+from pathlib import Path
+from typing import Iterator, Literal, Optional, Union, List
+
+import numpy as np
+from aind_data_transformation.core import (
+    BasicJobSettings,
+    GenericEtl,
+    JobResponse,
+    get_parser,
+)
+from numcodecs.blosc import Blosc
+from pydantic import Field
+
+from aind_smartspim_data_transformation.models import (
+    CompressorName,
+)
+
+from aind_smartspim_data_transformation.io import PngReader
+from dask.distributed import Client, LocalCluster
+from png_to_zarr import smartspim_channel_zarr_writer
+
+class SmartspimJobSettings(BasicJobSettings):
+    """SmartspimCompressionJob settings."""
+
+    # Compress settings
+    random_seed: Optional[int] = 0
+    compress_write_output_format: Literal["zarr"] = Field(
+        default="zarr",
+        description=(
+            "Output format for compression. Currently, only zarr supported."
+        ),
+        title="Write Output Format",
+    )
+    compressor_name: CompressorName = Field(
+        default=CompressorName.BLOSC,
+        description="Type of compressor to use.",
+        title="Compressor Name.",
+    )
+    # It will be safer if these kwargs fields were objects with known schemas
+    compressor_kwargs: dict = Field(
+        default={"cname": "zstd", "clevel": 3, 'shuffle': Blosc.SHUFFLE},
+        description="Arguments to be used for the compressor.",
+        title="Compressor Kwargs",
+    )
+    compress_job_save_kwargs: dict = Field(
+        default={"n_jobs": -1},  # -1 to use all available cpu cores.
+        description="Arguments for recording save method.",
+        title="Compress Job Save Kwargs",
+    )
+    chunk_size: int = Field(
+        default=128,
+        description="Image chunk size",
+        title="Image Chunk Size",
+    )
+
+
+class SmartspimCompressionJob(GenericEtl[SmartspimJobSettings]):
+    """Main class to handle smartspim data compression"""
+
+    def _get_delayed_channel_stack(
+        self,
+        channel_paths: List[str],
+        output_dir: str
+    ) -> Iterator[dict]:
+        """
+        Reads a stack of PNG images into a delayed zarr dataset.
+
+        Returns:
+        Iterator[dict]
+            A generator that returns delayed PNG stacks.
+
+        """
+        for channel_path in channel_paths:
+
+            cols = os.listdir(channel_path)
+            for col in cols:
+                curr_col = channel_path.joinpath(col)
+                for row in os.listdir(curr_col):
+                    curr_row = curr_col.joinpath(row)
+                    delayed_stack = PngReader(data_path=f"{curr_row}/*.png").as_dask_array()
+                    stack_name = f"{col}_{row.split('_')[-1]}.zarr"
+                    stack_output_path = Path(f"{output_dir}/{channel_path.stem}")
+
+                    yield (
+                        delayed_stack,
+                        stack_output_path,
+                        stack_name
+                    )
+
+
+    def _get_compressor(self) -> Blosc:
+        """
+        Utility method to construct a compressor class.
+        Returns
+        -------
+        Blosc
+          Either an instantiated Blosc or WavPack class.
+
+        """
+        if self.job_settings.compressor_name == CompressorName.BLOSC:
+            return Blosc(**self.job_settings.compressor_kwargs)
+        else:
+            # TODO: This is validated during the construction of JobSettings,
+            #  so we can probably just remove this exception.
+            raise Exception(
+                f"Unknown compressor. Please select one of "
+                f"{[c for c in CompressorName]}"
+            )
+
+    @staticmethod
+    def _compress_and_write_channels(
+        read_channel_stacks: Iterator[dict],
+        compressor: Blosc,
+        job_kwargs: dict,
+        output_format: str = "zarr",
+    ) -> None:
+
+        if job_kwargs["n_jobs"] == -1:
+            job_kwargs["n_jobs"] = os.cpu_count()
+
+        n_workers = job_kwargs["n_jobs"]
+        threads_per_worker = 1
+
+        # Instantiating local cluster for parallel writing
+        cluster = LocalCluster(
+            n_workers=n_workers,
+            threads_per_worker=threads_per_worker,
+            processes=True,
+            memory_limit="auto",
+        )
+
+        client = Client(cluster)
+        i = 0
+        for delayed_arr, output_path, stack_name in read_channel_stacks:
+            if i == 2:
+                break
+            
+            i += 1
+            smartspim_channel_zarr_writer(
+                image_data=delayed_arr,
+                output_path=output_path,
+                voxel_size=[2.0, 1.8, 1.8],
+                final_chunksize=(128, 128, 128),
+                scale_factor=[2, 2, 2],
+                n_lvls=4,
+                channel_name=output_path.stem,
+                stack_name=stack_name,
+                client=client,
+                logger=logging,
+                writing_options=compressor,
+            )
+
+    def _compress_raw_data(self) -> None:
+        """Compresses smartspim data"""
+
+        # Clip the data
+        logging.info("Converting PNG to OMEZarr. This may take some minutes.")
+        output_compressed_data = (
+            self.job_settings.output_directory / "SPIM"
+        )
+        
+        channel_paths = [
+            Path(self.job_settings.input_source).joinpath(folder)
+            for folder in os.listdir(
+                self.job_settings.input_source
+            )
+        ]
+
+        # Get channel stack iterators and delayed arrays
+        read_delayed_channel_stacks = self._get_delayed_channel_stack(
+            channel_paths=channel_paths,
+            output_dir=output_compressed_data,   
+        )
+        
+        # Getting compressors
+        compressor = self._get_compressor()
+        
+        # Writing compressed stacks
+        self._compress_and_write_channels(
+            read_channel_stacks=read_delayed_channel_stacks,
+            compressor=compressor,
+            output_format=self.job_settings.compress_write_output_format,
+            job_kwargs=self.job_settings.compress_job_save_kwargs
+        )
+        logging.info("Finished compressing source data.")
+
+    def run_job(self) -> JobResponse:
+        """
+        Main public method to run the compression job
+        Returns
+        -------
+        JobResponse
+          Information about the job that can be used for metadata downstream.
+
+        """
+        job_start_time = datetime.now()
+        self._compress_raw_data()
+        job_end_time = datetime.now()
+        return JobResponse(
+            status_code=200,
+            message=f"Job finished in: {job_end_time-job_start_time}",
+            data=None,
+        )
+
+
+def main():
+    """ Main function """
+    sys_args = sys.argv[1:]
+    parser = get_parser()
+    cli_args = parser.parse_args(sys_args)
+    if cli_args.job_settings is not None:
+        job_settings = SmartspimJobSettings.model_validate_json(
+            cli_args.job_settings
+        )
+    elif cli_args.config_file is not None:
+        job_settings = SmartspimJobSettings.from_config_file(cli_args.config_file)
+    else:
+        # Construct settings from env vars
+        job_settings = SmartspimJobSettings(
+            input_source="/data/SmartSPIM_714635_2024-03-18_10-47-48/SmartSPIM",
+            output_directory="/scratch/"
+        )
+    job = SmartspimCompressionJob(job_settings=job_settings)
+    job_response = job.run_job()
+    logging.info(job_response.model_dump_json())
+
+if __name__ == "__main__":
+    main()
