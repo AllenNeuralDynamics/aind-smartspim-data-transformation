@@ -36,6 +36,7 @@ import numpy as np
 PathLike = Union[str, Path]
 ArrayLike = Union[da.Array, np.ndarray]
 
+
 class ImageReader(ABC):
     """
     Abstract class to create image readers

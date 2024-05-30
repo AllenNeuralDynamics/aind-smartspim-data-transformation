@@ -9,18 +9,23 @@ import logging
 import multiprocessing
 import os
 import time
+from datetime import datetime
+from pathlib import Path
 from typing import Dict, Hashable, List, Optional, Sequence, Tuple, Union, cast
 
 import dask
 import dask.array as da
+
 # import matplotlib.pyplot as plt
 import numpy as np
 import pims
 import xarray_multiscale
 import zarr
+from dask import config as da_cfg
 from dask.array.core import Array
 from dask.base import tokenize
 from dask.distributed import Client, LocalCluster, performance_report
+
 # from distributed import wait
 from numcodecs import blosc
 from ome_zarr.format import CurrentFormat
@@ -28,12 +33,10 @@ from ome_zarr.io import parse_url
 from ome_zarr.writer import write_multiscales_metadata
 from skimage.io import imread as sk_imread
 
-from aind_smartspim_data_transformation.zarr_writer import BlockedArrayWriter
-from aind_smartspim_data_transformation.zarr_utilities import *
-from pathlib import Path
 from aind_smartspim_data_transformation.io import PngReader
-from datetime import datetime
-from dask import config as da_cfg
+from aind_smartspim_data_transformation.zarr_utilities import *
+from aind_smartspim_data_transformation.zarr_writer import BlockedArrayWriter
+
 
 def set_dask_config(dask_folder: str):
     """
@@ -58,6 +61,7 @@ def set_dask_config(dask_folder: str):
             "distributed.worker.memory.terminate": 0.98,
         }
     )
+
 
 def _build_ome(
     data_shape: Tuple[int, ...],
@@ -87,7 +91,9 @@ def _build_ome(
     Dict: An "omero" metadata object suitable for writing to ome-zarr
     """
     if channel_names is None:
-        channel_names = [f"Channel:{image_name}:{i}" for i in range(data_shape[1])]
+        channel_names = [
+            f"Channel:{image_name}:{i}" for i in range(data_shape[1])
+        ]
     if channel_colors is None:
         channel_colors = [i for i in range(data_shape[1])]
     if channel_minmax is None:
@@ -167,7 +173,9 @@ def _compute_scales(
         ]
     ]
     if translation is not None:
-        transforms[0].append({"type": "translation", "translation": translation})
+        transforms[0].append(
+            {"type": "translation", "translation": translation}
+        )
     chunk_sizes = []
     lastz = data_shape[2]
     lasty = data_shape[3]
@@ -528,7 +536,7 @@ def smartspim_channel_zarr_writer(
     logger: logging.Logger,
     stack_name: str,
     writing_options,
-    client
+    client,
 ):
     """
     Writes a fused SmartSPIM channel in OMEZarr
@@ -579,7 +587,7 @@ def smartspim_channel_zarr_writer(
     # Rechunking dask array
     image_data = image_data.rechunk(final_chunksize)
     image_data = pad_array_n_d(arr=image_data)
-    
+
     print(f"About to write {image_data} in {output_path}")
 
     # Creating Zarr dataset
@@ -598,7 +606,10 @@ def smartspim_channel_zarr_writer(
 
     # Getting min max metadata for the dtype
     channel_minmax = [
-        (np_info_func(image_data.dtype).min, np_info_func(image_data.dtype).max)
+        (
+            np_info_func(image_data.dtype).min,
+            np_info_func(image_data.dtype).max,
+        )
         for _ in range(image_data.shape[1])
     ]
 
@@ -608,7 +619,9 @@ def smartspim_channel_zarr_writer(
     # not used that much on neuroglancer
     channel_startend = [(0.0, 350.0) for _ in range(image_data.shape[1])]
 
-    new_channel_group = root_group.create_group(name=stack_name, overwrite=True)
+    new_channel_group = root_group.create_group(
+        name=stack_name, overwrite=True
+    )
 
     # Writing OME-NGFF metadata
     write_ome_ngff_metadata(
@@ -624,7 +637,7 @@ def smartspim_channel_zarr_writer(
         channel_startend=channel_startend,
         metadata=_get_pyramid_metadata(),
     )
-    
+
     performance_report_path = f"{output_path}/report_{stack_name}.html"
 
     start_time = time.time()
@@ -651,7 +664,9 @@ def smartspim_channel_zarr_writer(
             else:
                 # It's faster to write the scale and then read it back
                 # to compute the next scale
-                previous_scale = da.from_zarr(pyramid_group, pyramid_group.chunks)
+                previous_scale = da.from_zarr(
+                    pyramid_group, pyramid_group.chunks
+                )
                 new_scale_factor = (
                     [1] * (len(previous_scale.shape) - len(scale_factor))
                 ) + scale_factor
@@ -678,7 +693,9 @@ def smartspim_channel_zarr_writer(
             )
 
             # Block Zarr Writer
-            BlockedArrayWriter.store(array_to_write, pyramid_group, block_shape)
+            BlockedArrayWriter.store(
+                array_to_write, pyramid_group, block_shape
+            )
             written_pyramid.append(array_to_write)
 
     end_time = time.time()
@@ -688,12 +705,12 @@ def smartspim_channel_zarr_writer(
 
 def convert_stacks_to_ome_zarr(channel_path, logger, output_path):
     # channel_path must end with Ex_{wav}_Em_{wav}
-    
+
     # Setting up local cluster
     n_workers = multiprocessing.cpu_count()
     logger.info(f"Setting {n_workers} workers")
     threads_per_worker = 1
-    
+
     # Instantiating local cluster for parallel writing
     cluster = LocalCluster(
         n_workers=n_workers,
@@ -709,7 +726,9 @@ def convert_stacks_to_ome_zarr(channel_path, logger, output_path):
         curr_col = channel_path.joinpath(col)
         for row in os.listdir(curr_col):
             curr_row = curr_col.joinpath(row)
-            delayed_stack = PngReader(data_path=f"{curr_row}/*.png").as_dask_array()
+            delayed_stack = PngReader(
+                data_path=f"{curr_row}/*.png"
+            ).as_dask_array()
             print(f"Writing curr stack {curr_row}: {delayed_stack}")
 
             smartspim_channel_zarr_writer(
@@ -724,12 +743,10 @@ def convert_stacks_to_ome_zarr(channel_path, logger, output_path):
                 channel_name=channel_path.stem,
                 logger=logger,
                 stack_name=f"{col}_{row.split('_')[-1]}.zarr",
-                client=client
+                client=client,
             )
-            
-    client.shutdown()
-    
-    
+
+
 def create_logger(output_log_path: PathLike) -> logging.Logger:
     """
     Creates a logger that generates
@@ -767,28 +784,30 @@ def create_logger(output_log_path: PathLike) -> logging.Logger:
 
     return logger
 
+
 def main():
-    
+
     data_folder = Path(os.path.abspath("../data"))
     results_folder = Path(os.path.abspath("../results"))
     scratch_folder = Path(os.path.abspath("../scratch"))
-    
+
     set_dask_config(dask_folder=scratch_folder)
-    
+
     logger = create_logger(output_log_path=results_folder)
-    
+
     BASE_PATH = data_folder.joinpath(
         "SmartSPIM_692911_2023-10-23_11-27-30/SmartSPIM"
     )
-    
+
     channels = os.listdir(str(BASE_PATH))
-    
+
     for channel in channels:
         convert_stacks_to_ome_zarr(
             channel_path=BASE_PATH.joinpath(channel),
             logger=logger,
-            output_path=results_folder
+            output_path=results_folder,
         )
-    
+
+
 if __name__ == "__main__":
     main()

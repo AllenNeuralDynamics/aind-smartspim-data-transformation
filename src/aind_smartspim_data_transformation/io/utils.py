@@ -4,10 +4,8 @@ Utility functions for image readers
 
 import json
 import os
-from typing import Optional
-
 from pathlib import Path
-from typing import Union
+from typing import Optional, Union
 
 import dask.array as da
 import numpy as np

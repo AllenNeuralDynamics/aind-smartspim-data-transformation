@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Optional, Tuple, Union
 
 import dask
+import dask.array as da
 import numpy as np
 import pims
 from dask.array import concatenate, pad
@@ -17,7 +18,6 @@ from dask.base import tokenize
 from natsort import natsorted
 from numcodecs import blosc
 from skimage.io import imread as sk_imread
-import dask.array as da
 
 PathLike = Union[str, Path]
 ArrayLike = Union[dask.array.core.Array, np.ndarray]
@@ -221,7 +221,9 @@ def fix_image_diff_dims(
     return new_arr
 
 
-def concatenate_dask_arrays(arr_1: ArrayLike, arr_2: ArrayLike, axis: int) -> ArrayLike:
+def concatenate_dask_arrays(
+    arr_1: ArrayLike, arr_2: ArrayLike, axis: int
+) -> ArrayLike:
     """
     Concatenates two arrays in a given
     dimension
@@ -342,11 +344,13 @@ def read_chunked_stitched_image_per_channel(
             horizontal = []
             shape = None
             dtype = None
-            column_names = list(directory_structure[channel_name][row_name].keys())
+            column_names = list(
+                directory_structure[channel_name][row_name].keys()
+            )
             n_cols = len(column_names)
-            
-            check_shape = (1, 256,256,256)
-            
+
+            check_shape = (1, 256, 256, 256)
+
             for column_name_idx in range(n_cols):
                 valid_image = True
                 column_name = column_names[column_name_idx]
@@ -367,17 +371,23 @@ def read_chunked_stitched_image_per_channel(
                         .joinpath(slice_name)
                     )
 
-                    new_arr = lazy_tiff_reader(filepath)#, dtype=dtype, shape=shape)
-                        
+                    new_arr = lazy_tiff_reader(
+                        filepath
+                    )  # , dtype=dtype, shape=shape)
+
                     if (shape is None or dtype is None) and new_arr:
                         shape = new_arr.shape
                         dtype = new_arr.dtype
                         last_col = False
 
                 except ValueError:
-                    print(f"{filepath} -> No valid image in ", slice_name, slice_pos)
-#                     valid_image = False
-#                     new_arr = da.zeros(check_shape, dtype=new_arr.dtype)
+                    print(
+                        f"{filepath} -> No valid image in ",
+                        slice_name,
+                        slice_pos,
+                    )
+                #                     valid_image = False
+                #                     new_arr = da.zeros(check_shape, dtype=new_arr.dtype)
 
                 if valid_image:
                     horizontal.append(new_arr)
@@ -391,11 +401,15 @@ def read_chunked_stitched_image_per_channel(
                     shape = horizontal[i].shape
                     dtype = horizontal[i].dtype
                     break
-            
+
             for i in range(len(horizontal)):
-                if horizontal[i] is None and shape is not None and dtype is not None:
+                if (
+                    horizontal[i] is None
+                    and shape is not None
+                    and dtype is not None
+                ):
                     horizontal[i] = da.zeros(shape, dtype=dtype)
-            
+
             print("Before concat: ", horizontal)
             horizontal_concat = concatenate(horizontal, axis=-1)
 
@@ -537,7 +551,9 @@ def channel_parallel_reading(
             if not res_idx:
                 dask_array = res[res_idx][0]
             else:
-                dask_array = concatenate([dask_array, res[res_idx][0]], axis=-3)
+                dask_array = concatenate(
+                    [dask_array, res[res_idx][0]], axis=-3
+                )
 
             print(f"Slides: {res[res_idx][1]}")
 

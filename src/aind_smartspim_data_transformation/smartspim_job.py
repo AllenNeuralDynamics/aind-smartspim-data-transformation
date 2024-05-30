@@ -7,7 +7,7 @@ import shutil
 import sys
 from datetime import datetime
 from pathlib import Path
-from typing import Iterator, Literal, Optional, Union, List
+from typing import Iterator, List, Literal, Optional, Union
 
 import numpy as np
 from aind_data_transformation.core import (
@@ -16,16 +16,18 @@ from aind_data_transformation.core import (
     JobResponse,
     get_parser,
 )
+from dask.distributed import Client, LocalCluster
 from numcodecs.blosc import Blosc
+from png_to_zarr import smartspim_channel_zarr_writer
 from pydantic import Field
 
-from aind_smartspim_data_transformation.models import (
-    CompressorName,
+from aind_smartspim_data_transformation.dask_utils import (
+    get_client,
+    get_deployment,
 )
-
 from aind_smartspim_data_transformation.io import PngReader
-from dask.distributed import Client, LocalCluster
-from png_to_zarr import smartspim_channel_zarr_writer
+from aind_smartspim_data_transformation.models import CompressorName
+
 
 class SmartspimJobSettings(BasicJobSettings):
     """SmartspimCompressionJob settings."""
@@ -46,7 +48,7 @@ class SmartspimJobSettings(BasicJobSettings):
     )
     # It will be safer if these kwargs fields were objects with known schemas
     compressor_kwargs: dict = Field(
-        default={"cname": "zstd", "clevel": 3, 'shuffle': Blosc.SHUFFLE},
+        default={"cname": "zstd", "clevel": 3, "shuffle": Blosc.SHUFFLE},
         description="Arguments to be used for the compressor.",
         title="Compressor Kwargs",
     )
@@ -66,9 +68,7 @@ class SmartspimCompressionJob(GenericEtl[SmartspimJobSettings]):
     """Main class to handle smartspim data compression"""
 
     def _get_delayed_channel_stack(
-        self,
-        channel_paths: List[str],
-        output_dir: str
+        self, channel_paths: List[str], output_dir: str
     ) -> Iterator[dict]:
         """
         Reads a stack of PNG images into a delayed zarr dataset.
@@ -85,16 +85,15 @@ class SmartspimCompressionJob(GenericEtl[SmartspimJobSettings]):
                 curr_col = channel_path.joinpath(col)
                 for row in os.listdir(curr_col):
                     curr_row = curr_col.joinpath(row)
-                    delayed_stack = PngReader(data_path=f"{curr_row}/*.png").as_dask_array()
+                    delayed_stack = PngReader(
+                        data_path=f"{curr_row}/*.png"
+                    ).as_dask_array()
                     stack_name = f"{col}_{row.split('_')[-1]}.zarr"
-                    stack_output_path = Path(f"{output_dir}/{channel_path.stem}")
-
-                    yield (
-                        delayed_stack,
-                        stack_output_path,
-                        stack_name
+                    stack_output_path = Path(
+                        f"{output_dir}/{channel_path.stem}"
                     )
 
+                    yield (delayed_stack, stack_output_path, stack_name)
 
     def _get_compressor(self) -> Blosc:
         """
@@ -130,19 +129,19 @@ class SmartspimCompressionJob(GenericEtl[SmartspimJobSettings]):
         threads_per_worker = 1
 
         # Instantiating local cluster for parallel writing
-        cluster = LocalCluster(
+        deployment = get_deployment()
+        client, _ = get_client(
+            deployment,
+            worker_options=None,  # worker_options,
             n_workers=n_workers,
-            threads_per_worker=threads_per_worker,
             processes=True,
-            memory_limit="auto",
         )
 
-        client = Client(cluster)
         i = 0
         for delayed_arr, output_path, stack_name in read_channel_stacks:
             if i == 2:
                 break
-            
+
             i += 1
             smartspim_channel_zarr_writer(
                 image_data=delayed_arr,
@@ -158,37 +157,36 @@ class SmartspimCompressionJob(GenericEtl[SmartspimJobSettings]):
                 writing_options=compressor,
             )
 
+        # Closing client
+        client.shutdown()
+
     def _compress_raw_data(self) -> None:
         """Compresses smartspim data"""
 
         # Clip the data
         logging.info("Converting PNG to OMEZarr. This may take some minutes.")
-        output_compressed_data = (
-            self.job_settings.output_directory / "SPIM"
-        )
-        
+        output_compressed_data = self.job_settings.output_directory / "SPIM"
+
         channel_paths = [
             Path(self.job_settings.input_source).joinpath(folder)
-            for folder in os.listdir(
-                self.job_settings.input_source
-            )
+            for folder in os.listdir(self.job_settings.input_source)
         ]
 
         # Get channel stack iterators and delayed arrays
         read_delayed_channel_stacks = self._get_delayed_channel_stack(
             channel_paths=channel_paths,
-            output_dir=output_compressed_data,   
+            output_dir=output_compressed_data,
         )
-        
+
         # Getting compressors
         compressor = self._get_compressor()
-        
+
         # Writing compressed stacks
         self._compress_and_write_channels(
             read_channel_stacks=read_delayed_channel_stacks,
             compressor=compressor,
             output_format=self.job_settings.compress_write_output_format,
-            job_kwargs=self.job_settings.compress_job_save_kwargs
+            job_kwargs=self.job_settings.compress_job_save_kwargs,
         )
         logging.info("Finished compressing source data.")
 
@@ -212,7 +210,7 @@ class SmartspimCompressionJob(GenericEtl[SmartspimJobSettings]):
 
 
 def main():
-    """ Main function """
+    """Main function"""
     sys_args = sys.argv[1:]
     parser = get_parser()
     cli_args = parser.parse_args(sys_args)
@@ -221,16 +219,19 @@ def main():
             cli_args.job_settings
         )
     elif cli_args.config_file is not None:
-        job_settings = SmartspimJobSettings.from_config_file(cli_args.config_file)
+        job_settings = SmartspimJobSettings.from_config_file(
+            cli_args.config_file
+        )
     else:
         # Construct settings from env vars
         job_settings = SmartspimJobSettings(
             input_source="/data/SmartSPIM_714635_2024-03-18_10-47-48/SmartSPIM",
-            output_directory="/scratch/"
+            output_directory="/scratch/",
         )
     job = SmartspimCompressionJob(job_settings=job_settings)
     job_response = job.run_job()
     logging.info(job_response.model_dump_json())
+
 
 if __name__ == "__main__":
     main()

@@ -73,7 +73,9 @@ def expand_chunks(
     if any(s < 1 for s in data_shape):
         raise ValueError("data_shape must be >= 1 for all dimensions")
     if any(c > s for c, s in zip(chunks, data_shape)):
-        raise ValueError("chunks cannot be larger than data_shape in any dimension")
+        raise ValueError(
+            "chunks cannot be larger than data_shape in any dimension"
+        )
     if target_size <= 0:
         raise ValueError("target_size must be > 0")
     if itemsize <= 0:
@@ -149,7 +151,9 @@ class BlockedArrayWriter:
             A generator yielding tuples of slices. Each tuple can be used to index the input array.
         """
         if len(arr_shape) != len(block_shape):
-            raise Exception("array shape and block shape have different lengths")
+            raise Exception(
+                "array shape and block shape have different lengths"
+            )
 
         def _slice_along_dim(dim: int) -> Generator:
             """A helper generator function that slices along one dimension."""
@@ -169,7 +173,9 @@ class BlockedArrayWriter:
         return _slice_along_dim(0)
 
     @staticmethod
-    def store(in_array: da.Array, out_array: ArrayLike, block_shape: tuple) -> None:
+    def store(
+        in_array: da.Array, out_array: ArrayLike, block_shape: tuple
+    ) -> None:
         """
         Partitions the last 3 dimensions of a Dask array into non-overlapping blocks and
         writes them sequentially to a Zarr array. This is meant to reduce the scheduling burden
