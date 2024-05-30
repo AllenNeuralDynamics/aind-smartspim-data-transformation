@@ -137,12 +137,7 @@ class SmartspimCompressionJob(GenericEtl[SmartspimJobSettings]):
             processes=True,
         )
 
-        i = 0
         for delayed_arr, output_path, stack_name in read_channel_stacks:
-            if i == 2:
-                break
-
-            i += 1
             smartspim_channel_zarr_writer(
                 image_data=delayed_arr,
                 output_path=output_path,
