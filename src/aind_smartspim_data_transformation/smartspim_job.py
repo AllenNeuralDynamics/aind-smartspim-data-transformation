@@ -161,10 +161,13 @@ class SmartspimCompressionJob(GenericEtl[SmartspimJobSettings]):
         # Clip the data
         logging.info("Converting PNG to OMEZarr. This may take some minutes.")
         output_compressed_data = self.job_settings.output_directory
+        
+        raw_path = self.job_settings.input_source / "SmartSPIM"
+        logging.info(f"Raw path: {raw_path} - OS: {os.listdir(self.job_settings.input_source)}")
 
         channel_paths = [
-            Path(self.job_settings.input_source).joinpath(folder)
-            for folder in os.listdir(self.job_settings.input_source)
+            Path(raw_path).joinpath(folder)
+            for folder in os.listdir(raw_path)
         ]
 
         # Get channel stack iterators and delayed arrays
@@ -220,7 +223,7 @@ def main():
     else:
         # Construct settings from env vars
         job_settings = SmartspimJobSettings(
-            input_source="/data/SmartSPIM_714635_2024-03-18_10-47-48/SmartSPIM",
+            input_source="/data/SmartSPIM_714635_2024-03-18_10-47-48",
             output_directory="/scratch/",
         )
     job = SmartspimCompressionJob(job_settings=job_settings)
