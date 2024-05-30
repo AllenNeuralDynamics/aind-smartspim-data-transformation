@@ -706,6 +706,23 @@ def smartspim_channel_zarr_writer(
 
 
 def convert_stacks_to_ome_zarr(channel_path, logger, output_path):
+    """
+    Converts image stacks from PNG to OMEZarr.
+
+    Parameters
+    ----------
+    channel_path: str
+        Path where the stacks for the channel
+        are located.
+
+    logger: logging.Logger
+        Logging object
+
+    output_path: str
+        Path where we want to write the converted
+        stacks to OMEZarr.
+
+    """
     # channel_path must end with Ex_{wav}_Em_{wav}
 
     # Setting up local cluster
@@ -788,6 +805,9 @@ def create_logger(output_log_path: PathLike) -> logging.Logger:
 
 
 def main():
+    """
+    Main function in how to use these functions
+    """
 
     data_folder = Path(os.path.abspath("../data"))
     results_folder = Path(os.path.abspath("../results"))

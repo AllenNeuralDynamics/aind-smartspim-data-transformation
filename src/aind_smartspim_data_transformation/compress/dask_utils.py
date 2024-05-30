@@ -1,3 +1,7 @@
+"""
+Module for dask utilities
+"""
+
 import logging
 import os
 import socket
@@ -19,6 +23,8 @@ LOGGER = logging.getLogger(__name__)
 
 
 class Deployment(Enum):
+    """Deployment enums"""
+
     LOCAL = "local"
     SLURM = "slurm"
 
@@ -44,6 +50,15 @@ def log_dashboard_address(
 
 
 def get_deployment() -> str:
+    """
+    Gets the SLURM deployment if this
+    exists
+
+    Returns
+    -------
+    str
+        SLURM_JOBID
+    """
     if os.getenv("SLURM_JOBID") is None:
         deployment = Deployment.LOCAL.value
     else:

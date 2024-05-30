@@ -67,12 +67,12 @@ class SmartspimCompressionJob(GenericEtl[SmartspimJobSettings]):
 
     def _get_delayed_channel_stack(
         self, channel_paths: List[str], output_dir: str
-    ) -> Iterator[dict]:
+    ) -> Iterator[tuple]:
         """
         Reads a stack of PNG images into a delayed zarr dataset.
 
         Returns:
-        Iterator[dict]
+        Iterator[tuple]
             A generator that returns delayed PNG stacks.
 
         """
@@ -99,7 +99,7 @@ class SmartspimCompressionJob(GenericEtl[SmartspimJobSettings]):
         Returns
         -------
         Blosc
-          Either an instantiated Blosc or WavPack class.
+          An instantiated Blosc compressor.
 
         """
         if self.job_settings.compressor_name == CompressorName.BLOSC:
@@ -114,11 +114,20 @@ class SmartspimCompressionJob(GenericEtl[SmartspimJobSettings]):
 
     @staticmethod
     def _compress_and_write_channels(
-        read_channel_stacks: Iterator[dict],
+        read_channel_stacks: Iterator[tuple],
         compressor: Blosc,
         job_kwargs: dict,
         output_format: str = "zarr",
-    ) -> None:
+    ):
+        """
+        Compresses SmartSPIM image data.
+
+        Parameters
+        ----------
+        read_channel_stacks: Iterator[tuple]
+            Iterator that returns the delayed image stack,
+            image path and stack name.
+        """
 
         if job_kwargs["n_jobs"] == -1:
             job_kwargs["n_jobs"] = os.cpu_count()
@@ -221,10 +230,7 @@ def main():
         )
     else:
         # Construct settings from env vars
-        job_settings = SmartspimJobSettings(
-            input_source="/data/SmartSPIM_714635_2024-03-18_10-47-48",
-            output_directory="/scratch/",
-        )
+        job_settings = SmartspimJobSettings()
     job = SmartspimCompressionJob(job_settings=job_settings)
     job_response = job.run_job()
     logging.info(job_response.model_dump_json())
