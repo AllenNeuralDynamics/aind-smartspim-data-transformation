@@ -160,7 +160,7 @@ class SmartspimCompressionJob(GenericEtl[SmartspimJobSettings]):
 
         # Clip the data
         logging.info("Converting PNG to OMEZarr. This may take some minutes.")
-        output_compressed_data = self.job_settings.output_directory / "SPIM"
+        output_compressed_data = self.job_settings.output_directory
 
         channel_paths = [
             Path(self.job_settings.input_source).joinpath(folder)
