@@ -88,7 +88,7 @@ class SmartspimCompressionJob(GenericEtl[SmartspimJobSettings]):
                     delayed_stack = PngReader(
                         data_path=f"{curr_row}/*.png"
                     ).as_dask_array()
-                    stack_name = f"{col}_{row.split('_')[-1]}.zarr"
+                    stack_name = f"{col}_{row.split('_')[-1]}.ome.zarr"
                     stack_output_path = Path(
                         f"{output_dir}/{channel_path.stem}"
                     )
