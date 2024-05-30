@@ -1,0 +1,25 @@
+Bootstrap: docker
+From: python:3.10-bullseye
+
+%setup
+    # Copy project directory into container
+    cp -R . ${SINGULARITY_ROOTFS}/aind-smartspim-data-transformation
+
+%post
+    # Installing dask mpi
+    wget https://www.mpich.org/static/downloads/3.2/mpich-3.2.tar.gz
+    tar xfz mpich-3.2.tar.gz
+    rm mpich-3.2.tar.gz
+    mkdir mpich-build
+    cd mpich-build
+    ../mpich-3.2/configure --disable-fortran 2>&1 | tee c.txt
+    make 2>&1 | tee m.txt
+    make install 2>&1 | tee mi.txt
+    cd ..
+
+    cd ${SINGULARITY_ROOTFS}/aind-smartspim-data-transformation
+    pip install . --no-cache-dir
+    rm -rf ${SINGULARITY_ROOTFS}/aind-smartspim-data-transformation
+
+    pip install mpi4py --no-cache-dir
+    pip install dask_mpi
