@@ -6,7 +6,7 @@ and the available metrics
 import os
 from abc import ABC, abstractmethod, abstractproperty
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 import dask.array as da
 import imageio as iio
@@ -20,17 +20,6 @@ from dask_image.imread import imread as daimread
 from skimage.io import imread as sk_imread
 
 from .utils import add_leading_dim, read_json_as_dict
-
-"""
-File that defines the constants used
-in the package
-"""
-
-from pathlib import Path
-from typing import Union
-
-import dask.array as da
-import numpy as np
 
 # IO types
 PathLike = Union[str, Path]
@@ -403,7 +392,7 @@ class TiffReader(ImageReader):
             Dictionary with image metadata
         """
         metadata = {}
-        with pims.open(data_path) as imgs:
+        with pims.open(self.data_path) as imgs:
             metadata["shape"] = (1,) + (len(imgs),) + imgs.frame_shape
             metadata["dtype"] = np.dtype(imgs.pixel_type)
 
@@ -555,7 +544,7 @@ class PngReader(ImageReader):
             Dictionary with image metadata
         """
         metadata = {}
-        with pims.open(data_path) as imgs:
+        with pims.open(self.data_path) as imgs:
             metadata["shape"] = (len(imgs),) + imgs.frame_shape
 
         return metadata

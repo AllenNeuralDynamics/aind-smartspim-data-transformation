@@ -37,7 +37,8 @@ def log_dashboard_address(
     port = client.scheduler_info()["services"]["dashboard"]
     user = os.getenv("USER")
     LOGGER.info(
-        f"To access the dashboard, run the following in a terminal: ssh -L {port}:{host}:{port} {user}@"
+        f"To access the dashboard, run the following in "
+        "a terminal: ssh -L {port}:{host}:{port} {user}@"
         f"{login_node_address} "
     )
 
@@ -78,7 +79,8 @@ def get_client(
         slurm_job_id = os.getenv("SLURM_JOBID")
         if slurm_job_id is None:
             raise Exception(
-                "SLURM_JOBID environment variable is not set. Are you running under SLURM?"
+                "SLURM_JOBID environment variable is not set."
+                "Are you running under SLURM?"
             )
         initialize(
             nthreads=int(os.getenv("SLURM_CPUS_PER_TASK", 1)),
@@ -108,7 +110,8 @@ def cancel_slurm_job(
 
     Args:
         job_id: the SLURM job ID
-        api_url: the URL of the SLURM REST API. E.g., "http://myhost:80/api/slurm/v0.0.36"
+        api_url: the URL of the SLURM REST API.
+        E.g., "http://myhost:80/api/slurm/v0.0.36"
 
     Raises:
         HTTPError: if the request to cancel the job fails

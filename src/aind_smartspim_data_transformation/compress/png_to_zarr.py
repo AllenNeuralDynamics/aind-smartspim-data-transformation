@@ -33,9 +33,11 @@ from ome_zarr.io import parse_url
 from ome_zarr.writer import write_multiscales_metadata
 from skimage.io import imread as sk_imread
 
+from aind_smartspim_data_transformation.compress.zarr_utilities import *
+from aind_smartspim_data_transformation.compress.zarr_writer import (
+    BlockedArrayWriter,
+)
 from aind_smartspim_data_transformation.io import PngReader
-from aind_smartspim_data_transformation.zarr_utilities import *
-from aind_smartspim_data_transformation.zarr_writer import BlockedArrayWriter
 
 
 def set_dask_config(dask_folder: str):

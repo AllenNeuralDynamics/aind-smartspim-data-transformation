@@ -83,7 +83,8 @@ def read_image_directory_structure(folder_dir: PathLike) -> dict:
     ------------------------
     dict:
         Dictionary with the image representation where:
-        {channel_1: ... {channel_n: {col_1: ... col_n: {row_1: ... row_n: [image_0, ..., image_n]} } } }
+        {channel_1: ... {channel_n: {col_1: ...
+        col_n: {row_1: ... row_n: [image_0, ..., image_n]} } } }
     """
 
     directory_structure = {}
@@ -305,7 +306,8 @@ def read_chunked_stitched_image_per_channel(
 
     directory_structure:dict
         dictionary to store paths of images with the following structure:
-        {channel_1: ... {channel_n: {col_1: ... col_n: {row_1: ... row_n: [image_0, ..., image_n]} } } }
+        {channel_1: ... {channel_n: {col_1: ...
+        col_n: {row_1: ... row_n: [image_0, ..., image_n]} } } }
 
     channel_name : str
         Channel name to reconstruct the image volume
@@ -349,7 +351,7 @@ def read_chunked_stitched_image_per_channel(
             )
             n_cols = len(column_names)
 
-            check_shape = (1, 256, 256, 256)
+            # check_shape = (1, 256, 256, 256)
 
             for column_name_idx in range(n_cols):
                 valid_image = True
@@ -386,8 +388,6 @@ def read_chunked_stitched_image_per_channel(
                         slice_name,
                         slice_pos,
                     )
-                #                     valid_image = False
-                #                     new_arr = da.zeros(check_shape, dtype=new_arr.dtype)
 
                 if valid_image:
                     horizontal.append(new_arr)
@@ -459,7 +459,8 @@ def channel_parallel_reading(
 
     directory_structure: dict
         dictionary to store paths of images with the following structure:
-        {channel_1: ... {channel_n: {col_1: ... col_n: {row_1: ... row_n: [image_0, ..., image_n]} } } }
+        {channel_1: ... {channel_n: {col_1: ...
+        col_n: {row_1: ... row_n: [image_0, ..., image_n]} } } }
 
     channel_name : str
         Channel name to reconstruct the image volume
@@ -511,7 +512,8 @@ def channel_parallel_reading(
     else:
         images_per_worker = n_images // workers
         print(
-            f"Setting workers to {workers} - {images_per_worker} - total images: {n_images}"
+            f"Setting workers to {workers}"
+            f"- {images_per_worker} - total images: {n_images}"
         )
 
         # Getting 5 dim image TCZYX
@@ -576,7 +578,8 @@ def parallel_read_chunked_stitched_multichannel_image(
 
     directory_structure: dict
         dictionary to store paths of images with the following structure:
-        {channel_1: ... {channel_n: {col_1: ... col_n: {row_1: ... row_n: [image_0, ..., image_n]} } } }
+        {channel_1: ... {channel_n: {col_1: ...
+        col_n: {row_1: ... row_n: [image_0, ..., image_n]} } } }
 
     sample_img: ArrayLike
         Image used as guide for the chunksize

@@ -2,28 +2,26 @@
 
 import logging
 import os
-import platform
-import shutil
 import sys
 from datetime import datetime
 from pathlib import Path
-from typing import Iterator, List, Literal, Optional, Union
+from typing import Iterator, List, Literal, Optional
 
-import numpy as np
 from aind_data_transformation.core import (
     BasicJobSettings,
     GenericEtl,
     JobResponse,
     get_parser,
 )
-from dask.distributed import Client, LocalCluster
 from numcodecs.blosc import Blosc
-from png_to_zarr import smartspim_channel_zarr_writer
 from pydantic import Field
 
-from aind_smartspim_data_transformation.dask_utils import (
+from aind_smartspim_data_transformation.compress.dask_utils import (
     get_client,
     get_deployment,
+)
+from aind_smartspim_data_transformation.compress.png_to_zarr import (
+    smartspim_channel_zarr_writer,
 )
 from aind_smartspim_data_transformation.io import PngReader
 from aind_smartspim_data_transformation.models import CompressorName
@@ -126,7 +124,6 @@ class SmartspimCompressionJob(GenericEtl[SmartspimJobSettings]):
             job_kwargs["n_jobs"] = os.cpu_count()
 
         n_workers = job_kwargs["n_jobs"]
-        threads_per_worker = 1
 
         # Instantiating local cluster for parallel writing
         deployment = get_deployment()
@@ -161,13 +158,15 @@ class SmartspimCompressionJob(GenericEtl[SmartspimJobSettings]):
         # Clip the data
         logging.info("Converting PNG to OMEZarr. This may take some minutes.")
         output_compressed_data = self.job_settings.output_directory
-        
+
         raw_path = self.job_settings.input_source / "SmartSPIM"
-        logging.info(f"Raw path: {raw_path} - OS: {os.listdir(self.job_settings.input_source)}")
+        logging.info(
+            f"Raw path: {raw_path}"
+            f"OS: {os.listdir(self.job_settings.input_source)}"
+        )
 
         channel_paths = [
-            Path(raw_path).joinpath(folder)
-            for folder in os.listdir(raw_path)
+            Path(raw_path).joinpath(folder) for folder in os.listdir(raw_path)
         ]
 
         # Get channel stack iterators and delayed arrays
