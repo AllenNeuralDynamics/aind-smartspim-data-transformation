@@ -262,7 +262,8 @@ class OMEZarrReader(ImageReader):
 
         zattrs_metadata = ""
         zarray_metadata = ""
-        # Checking inside and outside of folder due to dimension separator "." or "/"
+        # Checking inside and outside of folder
+        # due to dimension separator "." or "/"
         for path in [data_path, data_path.parent]:
             if path.joinpath(".zattrs").exists():
                 zattrs_metadata = path.joinpath(".zattrs")

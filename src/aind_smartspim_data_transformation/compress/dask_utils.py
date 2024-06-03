@@ -39,9 +39,9 @@ def log_dashboard_address(
         client: the Client instance
         login_node_address: the address of the cluster login node
     """
-    host = client.run_on_scheduler(socket.gethostname)
-    port = client.scheduler_info()["services"]["dashboard"]
-    user = os.getenv("USER")
+    host = client.run_on_scheduler(socket.gethostname)  # noqa: F841
+    port = client.scheduler_info()["services"]["dashboard"]  # noqa: F841
+    user = os.getenv("USER")  # noqa: F841
     LOGGER.info(
         f"To access the dashboard, run the following in "
         "a terminal: ssh -L {port}:{host}:{port} {user}@"

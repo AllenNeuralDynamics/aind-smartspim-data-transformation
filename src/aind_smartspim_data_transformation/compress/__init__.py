@@ -1,3 +1,3 @@
 """
-Init internal package
+Init SmartSPIM data transformation package
 """
