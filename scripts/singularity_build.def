@@ -18,8 +18,5 @@ From: python:3.10-bullseye
     cd ..
 
     cd ${SINGULARITY_ROOTFS}/aind-smartspim-data-transformation
-    pip install . --no-cache-dir
+    pip install . mpi4py dask_mpi --no-cache-dir
     rm -rf ${SINGULARITY_ROOTFS}/aind-smartspim-data-transformation
-
-    pip install mpi4py --no-cache-dir
-    pip install dask_mpi
