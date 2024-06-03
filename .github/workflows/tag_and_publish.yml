@@ -3,9 +3,7 @@ on:
   push:
     branches:
       - main
-# Remove line 61 to enable automated semantic version bumps.
-# Change line 67 from "if: false" to "if: true" to enable PyPI publishing. 
-# Requires that svc-aindscicomp be added as an admin to repo.
+
 jobs:
   update_badges:
     runs-on: ubuntu-latest
@@ -19,7 +17,7 @@ jobs:
     - name: Set up Python 3.10
       uses: actions/setup-python@v3
       with:
-        python-version: 3.10
+        python-version: '3.10'
     - name: Install dependencies
       run: | 
         python -m pip install -e .[dev] --no-cache-dir
@@ -62,28 +60,59 @@ jobs:
         add: '["README.md"]'
   tag:
     needs: update_badges
-    if: ${{github.event.repository.name == 'aind-library-template'}}
     uses: AllenNeuralDynamics/aind-github-actions/.github/workflows/tag.yml@main
     secrets:
       SERVICE_TOKEN: ${{ secrets.SERVICE_TOKEN }}
   publish:
-    needs: tag
-    if: false
     runs-on: ubuntu-latest
+    env:
+      GO_VERSION: '1.14.12'
+      GO_OS: 'linux'
+      GO_ARCH: 'amd64'
+      SINGULARITY_VERSION: '3.7.0'
+    needs: tag
     steps:
       - uses: actions/checkout@v3
       - name: Pull latest changes
         run: git pull origin main
-      - name: Set up Python 3.10
-        uses: actions/setup-python@v2
-        with:
-          python-version: 3.10
       - name: Install dependencies
         run: |
-          pip install --upgrade setuptools wheel twine build
-          python -m build
-          twine check dist/*
-      - name: Publish on PyPI
-        uses: pypa/gh-action-pypi-publish@release/v1
-        with:
-          password: ${{ secrets.AIND_PYPI_TOKEN }}
+          sudo apt-get update && sudo apt-get install -y \
+          build-essential \
+          libssl-dev \
+          uuid-dev \
+          libgpgme11-dev \
+          squashfs-tools \
+          libseccomp-dev \
+          wget \
+          pkg-config \
+          procps
+      - name: Install GO
+        run: |
+          wget https://dl.google.com/go/go$GO_VERSION.$GO_OS-$GO_ARCH.tar.gz
+          sudo tar -C /usr/local -xzvf go$GO_VERSION.$GO_OS-$GO_ARCH.tar.gz
+          sudo rm go$GO_VERSION.$GO_OS-$GO_ARCH.tar.gz
+          echo 'export PATH=$PATH:/usr/local/go/bin' | sudo tee -a /etc/profile
+      - name: Install Singularity
+        run: |
+          cd ..
+          wget https://github.com/hpcng/singularity/releases/download/v${SINGULARITY_VERSION}/singularity-${SINGULARITY_VERSION}.tar.gz
+          sudo tar -xzf singularity-${SINGULARITY_VERSION}.tar.gz
+          sudo rm singularity-${SINGULARITY_VERSION}.tar.gz
+          echo "Finished installing binaries"
+          export PATH=$PATH:/usr/local/go/bin
+          cd singularity
+          sudo ./mconfig --without-suid
+          sudo make -C ./builddir
+          sudo make -C ./builddir install
+      - name: Build sif container
+        run: |
+          ls /
+          ls
+          mkdir build
+          sudo singularity build build/container.sif scripts/singularity_build.def
+      - name: Login and Deploy Container
+        run: |
+          echo ${{ secrets.GITHUB_TOKEN }} | singularity remote login -u ${{ github.actor }} --password-stdin oras://ghcr.io
+          singularity push build/container.sif oras://ghcr.io/${GITHUB_REPOSITORY}:${{ needs.tag.outputs.new_version }}
+          singularity push build/container.sif oras://ghcr.io/${GITHUB_REPOSITORY}:latest
