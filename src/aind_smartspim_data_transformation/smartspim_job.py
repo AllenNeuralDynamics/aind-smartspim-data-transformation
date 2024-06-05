@@ -161,8 +161,8 @@ class SmartspimCompressionJob(GenericEtl[SmartspimJobSettings]):
             )
 
         # Closing client
-        with silence_logging_cmgr(logging.CRITICAL):
-            client.shutdown()
+        # with silence_logging_cmgr(logging.CRITICAL):
+        #     client.shutdown()
 
         _cleanup(deployment)
 
