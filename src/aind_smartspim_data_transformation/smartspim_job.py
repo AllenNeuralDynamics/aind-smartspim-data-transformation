@@ -13,10 +13,12 @@ from aind_data_transformation.core import (
     JobResponse,
     get_parser,
 )
+from distributed.utils import silence_logging_cmgr
 from numcodecs.blosc import Blosc
 from pydantic import Field
 
 from aind_smartspim_data_transformation.compress.dask_utils import (
+    _cleanup,
     get_client,
     get_deployment,
 )
@@ -159,7 +161,10 @@ class SmartspimCompressionJob(GenericEtl[SmartspimJobSettings]):
             )
 
         # Closing client
-        client.shutdown()
+        with silence_logging_cmgr(logging.CRITICAL):
+            client.shutdown()
+
+        _cleanup(deployment)
 
     def _compress_raw_data(self) -> None:
         """Compresses smartspim data"""

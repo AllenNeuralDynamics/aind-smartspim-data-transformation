@@ -137,3 +137,38 @@ def cancel_slurm_job(
     response = requests.delete(endpoint, headers=headers)
 
     return response
+
+
+def _cleanup(deployment: str) -> None:
+    """
+    Clean up any resources that were created during the job.
+
+    Parameters
+    ----------
+    deployment : str
+      The type of deployment. Either "local" or "slurm"
+    """
+    if deployment == Deployment.SLURM.value:
+        job_id = os.getenv("SLURM_JOBID")
+        if job_id is not None:
+            try:
+                api_url = f"http://{os.environ['HPC_HOST']}"
+                api_url += f":{os.environ['HPC_PORT']}"
+                api_url += f"/{os.environ['HPC_API_ENDPOINT']}"
+                headers = {
+                    "X-SLURM-USER-NAME": os.environ["HPC_USERNAME"],
+                    "X-SLURM-USER-PASSWORD": os.environ["HPC_PASSWORD"],
+                    "X-SLURM-USER-TOKEN": os.environ["HPC_TOKEN"],
+                }
+            except KeyError as ke:
+                logging.error(f"Failed to get SLURM env vars to cleanup: {ke}")
+                return
+            logging.info(f"Cancelling SLURM job {job_id}")
+            response = cancel_slurm_job(job_id, api_url, headers)
+            if response.status_code != 200:
+                logging.error(
+                    f"Failed to cancel SLURM job {job_id}: {response.text}"
+                )
+            else:
+                # This might not run if the job is cancelled
+                logging.info(f"Cancelled SLURM job {job_id}")
