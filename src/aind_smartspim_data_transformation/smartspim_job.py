@@ -34,13 +34,6 @@ class SmartspimJobSettings(BasicJobSettings):
 
     # Compress settings
     random_seed: Optional[int] = 0
-    compress_write_output_format: Literal["zarr"] = Field(
-        default="zarr",
-        description=(
-            "Output format for compression. Currently, only zarr supported."
-        ),
-        title="Write Output Format",
-    )
     compressor_name: CompressorName = Field(
         default=CompressorName.BLOSC,
         description="Type of compressor to use.",
@@ -201,7 +194,6 @@ class SmartspimCompressionJob(GenericEtl[SmartspimJobSettings]):
         self._compress_and_write_channels(
             read_channel_stacks=read_delayed_channel_stacks,
             compressor=compressor,
-            output_format=self.job_settings.compress_write_output_format,
             job_kwargs=self.job_settings.compress_job_save_kwargs,
         )
         logging.info("Finished compressing source data.")
