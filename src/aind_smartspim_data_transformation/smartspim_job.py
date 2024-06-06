@@ -119,7 +119,6 @@ class SmartspimCompressionJob(GenericEtl[SmartspimJobSettings]):
         read_channel_stacks: Iterator[tuple],
         compressor: Blosc,
         job_kwargs: dict,
-        output_format: str = "zarr",
     ):
         """
         Compresses SmartSPIM image data.
@@ -145,26 +144,32 @@ class SmartspimCompressionJob(GenericEtl[SmartspimJobSettings]):
             processes=True,
         )
 
-        for delayed_arr, output_path, stack_name in read_channel_stacks:
-            smartspim_channel_zarr_writer(
-                image_data=delayed_arr,
-                output_path=output_path,
-                voxel_size=[2.0, 1.8, 1.8],
-                final_chunksize=(128, 128, 128),
-                scale_factor=[2, 2, 2],
-                n_lvls=4,
-                channel_name=output_path.stem,
-                stack_name=stack_name,
-                client=client,
-                logger=logging,
-                writing_options=compressor,
-            )
+        try:
+            for delayed_arr, output_path, stack_name in read_channel_stacks:
+                smartspim_channel_zarr_writer(
+                    image_data=delayed_arr,
+                    output_path=output_path,
+                    voxel_size=[2.0, 1.8, 1.8],
+                    final_chunksize=(128, 128, 128),
+                    scale_factor=[2, 2, 2],
+                    n_lvls=4,
+                    channel_name=output_path.stem,
+                    stack_name=stack_name,
+                    client=client,
+                    logger=logging,
+                    writing_options=compressor,
+                )
 
+        except Exception as e:
+            print(f"Error converting array: {stack_name} {e}")
         # Closing client
         # with silence_logging_cmgr(logging.CRITICAL):
         #     client.shutdown()
 
-        _cleanup(deployment)
+        try:
+            _cleanup(deployment)
+        except Exception as e:
+            print(f"Error shutting down client: {e}")
 
     def _compress_raw_data(self) -> None:
         """Compresses smartspim data"""

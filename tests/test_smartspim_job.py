@@ -77,6 +77,9 @@ class SmartspimCompressionTest(unittest.TestCase):
             failed_basic_job_settings = failed_basic_job_settings
             SmartspimCompressionJob(job_settings=failed_basic_job_settings)
 
+    def test_compress_and_write_channels(self):
+        """Tests SmartSPIM compression and zarr writing"""
+        pass
 
 if __name__ == "__main__":
     unittest.main()

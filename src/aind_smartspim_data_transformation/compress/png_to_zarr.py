@@ -597,7 +597,7 @@ def smartspim_channel_zarr_writer(
     image_data = image_data.rechunk(final_chunksize)
     image_data = pad_array_n_d(arr=image_data)
 
-    print(f"About to write {image_data} in {output_path}")
+    print(f"About to write {image_data} in {output_path} with stack name {stack_name}")
 
     # Creating Zarr dataset
     store = parse_url(path=output_path, mode="w").store
@@ -710,6 +710,7 @@ def smartspim_channel_zarr_writer(
 
     end_time = time.time()
     logger.info(f"Time to write the dataset: {end_time - start_time}")
+    print(f"Time to write the dataset: {end_time - start_time}")
     logger.info(f"Written pyramid: {written_pyramid}")
 
 
