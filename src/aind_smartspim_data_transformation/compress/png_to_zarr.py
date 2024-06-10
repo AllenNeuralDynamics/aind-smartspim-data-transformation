@@ -545,7 +545,6 @@ def smartspim_channel_zarr_writer(
     logger: logging.Logger,
     stack_name: str,
     writing_options,
-    client,
 ):
     """
     Writes a fused SmartSPIM channel in OMEZarr
@@ -597,7 +596,7 @@ def smartspim_channel_zarr_writer(
     image_data = image_data.rechunk(final_chunksize)
     image_data = pad_array_n_d(arr=image_data)
 
-    print(f"About to write {image_data} in {output_path} with stack name {stack_name}")
+    print(f"Writing {image_data} from {stack_name} in {output_path}")
 
     # Creating Zarr dataset
     store = parse_url(path=output_path, mode="w").store

@@ -81,5 +81,6 @@ class SmartspimCompressionTest(unittest.TestCase):
         """Tests SmartSPIM compression and zarr writing"""
         pass
 
+
 if __name__ == "__main__":
     unittest.main()

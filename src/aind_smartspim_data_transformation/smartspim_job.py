@@ -5,7 +5,7 @@ import os
 import sys
 from datetime import datetime
 from pathlib import Path
-from typing import Iterator, List, Literal, Optional
+from typing import Iterator, List, Optional
 
 from aind_data_transformation.core import (
     BasicJobSettings,
@@ -13,7 +13,6 @@ from aind_data_transformation.core import (
     JobResponse,
     get_parser,
 )
-from distributed.utils import silence_logging_cmgr
 from numcodecs.blosc import Blosc
 from pydantic import Field
 
@@ -154,10 +153,7 @@ class SmartspimCompressionJob(GenericEtl[SmartspimJobSettings]):
                 )
 
         except Exception as e:
-            print(f"Error converting array: {stack_name} {e}")
-        # Closing client
-        # with silence_logging_cmgr(logging.CRITICAL):
-        #     client.shutdown()
+            print(f"Error converting array: {e}")
 
         try:
             _cleanup(deployment)
