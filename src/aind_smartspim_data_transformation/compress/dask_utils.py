@@ -44,7 +44,7 @@ def log_dashboard_address(
     user = os.getenv("USER")  # noqa: F841
     LOGGER.info(
         f"To access the dashboard, run the following in "
-        "a terminal: ssh -L {port}:{host}:{port} {user}@"
+        f"a terminal: ssh -L {port}:{host}:{port} {user}@"
         f"{login_node_address} "
     )
 

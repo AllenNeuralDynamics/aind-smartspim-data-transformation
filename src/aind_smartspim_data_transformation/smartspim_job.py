@@ -2,7 +2,6 @@
 
 import logging
 import os
-import sys
 from datetime import datetime
 from pathlib import Path
 from typing import Iterator, List, Optional
@@ -11,7 +10,6 @@ from aind_data_transformation.core import (
     BasicJobSettings,
     GenericEtl,
     JobResponse,
-    get_parser,
 )
 from numcodecs.blosc import Blosc
 from pydantic import Field
@@ -98,13 +96,8 @@ class SmartspimCompressionJob(GenericEtl[SmartspimJobSettings]):
         """
         if self.job_settings.compressor_name == CompressorName.BLOSC:
             return Blosc(**self.job_settings.compressor_kwargs)
-        else:
-            # TODO: This is validated during the construction of JobSettings,
-            #  so we can probably just remove this exception.
-            raise Exception(
-                f"Unknown compressor. Please select one of "
-                f"{[c for c in CompressorName]}"
-            )
+
+        return None
 
     @staticmethod
     def _compress_and_write_channels(
@@ -135,6 +128,7 @@ class SmartspimCompressionJob(GenericEtl[SmartspimJobSettings]):
             n_workers=n_workers,
             processes=True,
         )
+        print(f"Instantiated client: {client}")
 
         try:
             for delayed_arr, output_path, stack_name in read_channel_stacks:
@@ -147,7 +141,6 @@ class SmartspimCompressionJob(GenericEtl[SmartspimJobSettings]):
                     n_lvls=4,
                     channel_name=output_path.stem,
                     stack_name=stack_name,
-                    client=client,
                     logger=logging,
                     writing_options=compressor,
                 )
@@ -211,28 +204,3 @@ class SmartspimCompressionJob(GenericEtl[SmartspimJobSettings]):
             message=f"Job finished in: {job_end_time-job_start_time}",
             data=None,
         )
-
-
-def main():
-    """Main function"""
-    sys_args = sys.argv[1:]
-    parser = get_parser()
-    cli_args = parser.parse_args(sys_args)
-    if cli_args.job_settings is not None:
-        job_settings = SmartspimJobSettings.model_validate_json(
-            cli_args.job_settings
-        )
-    elif cli_args.config_file is not None:
-        job_settings = SmartspimJobSettings.from_config_file(
-            cli_args.config_file
-        )
-    else:
-        # Construct settings from env vars
-        job_settings = SmartspimJobSettings()
-    job = SmartspimCompressionJob(job_settings=job_settings)
-    job_response = job.run_job()
-    logging.info(job_response.model_dump_json())
-
-
-if __name__ == "__main__":
-    main()
