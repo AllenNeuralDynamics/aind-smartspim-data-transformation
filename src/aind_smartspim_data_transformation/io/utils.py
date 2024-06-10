@@ -4,12 +4,11 @@ Utility functions for image readers
 
 import json
 import os
-from typing import Optional, Union
+from typing import Optional
 
-import dask.array as da
 import numpy as np
 
-ArrayLike = Union[da.Array, np.ndarray]
+from aind_smartspim_data_transformation._shared.types import ArrayLike
 
 
 def add_leading_dim(data: ArrayLike):
@@ -27,6 +26,31 @@ def add_leading_dim(data: ArrayLike):
     """
 
     return data[None, ...]
+
+
+def pad_array_n_d(arr: ArrayLike, dim: int = 5) -> ArrayLike:
+    """
+    Pads a daks array to be in a 5D shape.
+
+    Parameters
+    ------------------------
+
+    arr: ArrayLike
+        Dask/numpy array that contains image data.
+    dim: int
+        Number of dimensions that the array will be padded
+
+    Returns
+    ------------------------
+    ArrayLike:
+        Padded dask/numpy array.
+    """
+    if dim > 5:
+        raise ValueError("Padding more than 5 dimensions is not supported.")
+
+    while arr.ndim < dim:
+        arr = arr[np.newaxis, ...]
+    return arr
 
 
 def extract_data(

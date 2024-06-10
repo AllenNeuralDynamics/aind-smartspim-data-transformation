@@ -1,6 +1,8 @@
 """Tests for the SmartSPIM data transfer"""
 
 import os
+import shutil
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -22,9 +24,12 @@ class SmartspimCompressionTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
         """Setup basic job settings and job that can be used across tests"""
+        # Folder to test the zarr writing from PNGs
+        cls.temp_folder = tempfile.mkdtemp(prefix="unittest_")
+
         basic_job_settings = SmartspimJobSettings(
             input_source=DATA_DIR,
-            output_directory=Path("output_dir"),
+            output_directory=Path(cls.temp_folder),
         )
         cls.basic_job_settings = basic_job_settings
         cls.basic_job = SmartspimCompressionJob(
@@ -63,7 +68,7 @@ class SmartspimCompressionTest(unittest.TestCase):
         current_blosc = Blosc(**self.basic_job.job_settings.compressor_kwargs)
         self.assertEqual(compressor, current_blosc)
 
-    def test_failing_compressor(self):
+    def test_getting_compressor_fail(self):
         """Test failed compression with Blosc"""
 
         with self.assertRaises(Exception):
@@ -77,9 +82,15 @@ class SmartspimCompressionTest(unittest.TestCase):
             failed_basic_job_settings = failed_basic_job_settings
             SmartspimCompressionJob(job_settings=failed_basic_job_settings)
 
-    def test_compress_and_write_channels(self):
+    def test_run_job(self):
         """Tests SmartSPIM compression and zarr writing"""
-        pass
+        self.basic_job.run_job()
+
+    @classmethod
+    def tearDownClass(cls) -> None:
+        """Tear down class method to clean up"""
+        if os.path.exists(cls.temp_folder):
+            shutil.rmtree(cls.temp_folder, ignore_errors=True)
 
 
 if __name__ == "__main__":
