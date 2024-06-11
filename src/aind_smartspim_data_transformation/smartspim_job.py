@@ -70,10 +70,20 @@ class SmartspimCompressionJob(GenericEtl[SmartspimJobSettings]):
         """
         for channel_path in channel_paths:
 
-            cols = os.listdir(channel_path)
+            cols = [
+                col_f
+                for col_f in os.listdir(channel_path)
+                if Path(channel_path).joinpath(col_f).is_dir()
+            ]
+
             for col in cols:
                 curr_col = channel_path.joinpath(col)
-                for row in os.listdir(curr_col):
+                rows_in_cols = [
+                    row_f
+                    for row_f in os.listdir(curr_col)
+                    if Path(curr_col).joinpath(row_f).is_dir()
+                ]
+                for row in rows_in_cols:
                     curr_row = curr_col.joinpath(row)
                     delayed_stack = PngReader(
                         data_path=f"{curr_row}/*.png"
@@ -132,6 +142,9 @@ class SmartspimCompressionJob(GenericEtl[SmartspimJobSettings]):
 
         try:
             for delayed_arr, output_path, stack_name in read_channel_stacks:
+                print(
+                    f"Converting {delayed_arr} from {stack_name} to {output_path}"
+                )
                 smartspim_channel_zarr_writer(
                     image_data=delayed_arr,
                     output_path=output_path,
@@ -161,13 +174,12 @@ class SmartspimCompressionJob(GenericEtl[SmartspimJobSettings]):
         output_compressed_data = self.job_settings.output_directory
 
         raw_path = self.job_settings.input_source / "SmartSPIM"
-        logging.info(
-            f"Raw path: {raw_path}"
-            f"OS: {os.listdir(self.job_settings.input_source)}"
-        )
+        print(f"Raw path: {raw_path} " f"OS: {raw_path}")
 
         channel_paths = [
-            Path(raw_path).joinpath(folder) for folder in os.listdir(raw_path)
+            Path(raw_path).joinpath(folder)
+            for folder in os.listdir(raw_path)
+            if Path(raw_path).joinpath(folder).is_dir()
         ]
 
         # Get channel stack iterators and delayed arrays
