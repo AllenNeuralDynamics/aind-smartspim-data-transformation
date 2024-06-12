@@ -1,4 +1,4 @@
-"""Module to handle ephys data compression"""
+"""Module to handle smartspim data compression"""
 
 import logging
 import os
