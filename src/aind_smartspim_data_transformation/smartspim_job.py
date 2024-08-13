@@ -461,7 +461,7 @@ def local_test():
         s3_location=s3_location,
         num_of_partitions=num_of_partitions,
         partition_to_process=0,
-        output_directory="/allen/aind/scratch/svc_aind_upload/test_data_sets/smartspim/test_transform_outputs/",
+        output_directory="some/local/path/test_transform_outputs/",
     )
 
     job = SmartspimCompressionJob(job_settings=job_settings)
