@@ -28,7 +28,7 @@ from aind_smartspim_data_transformation.io import PngReader
 from aind_smartspim_data_transformation.models import CompressorName
 
 
-class SmartspimJobSettings(BasicJobSettings):
+class SmartspimJobSettings2(BasicJobSettings):
     """SmartspimCompressionJob settings."""
 
     # Compress settings
@@ -56,7 +56,7 @@ class SmartspimJobSettings(BasicJobSettings):
     )
 
 
-class SmartspimCompressionJob(GenericEtl[SmartspimJobSettings]):
+class SmartspimCompressionJob2(GenericEtl[SmartspimJobSettings2]):
     """Main class to handle smartspim data compression"""
 
     def _get_delayed_channel_stack(
@@ -218,6 +218,77 @@ class SmartspimCompressionJob(GenericEtl[SmartspimJobSettings]):
             message=f"Job finished in: {job_end_time-job_start_time}",
             data=None,
         )
+
+class SmartspimJobSettings(BasicJobSettings):
+    """SmartspimCompressionJob settings."""
+
+    input_source: str = Field(
+        ...,
+        description=(
+            "Source of the SmartSPIM channel data. For example, "
+            "/scratch/SmartSPIM_695464_2023-10-18_20-30-30/SmartSPIM"
+        ),
+    )
+    staging_directory: str = Field(
+        ...,
+        description=(
+            "Where to write the data to locally."
+        ),
+    )
+    s3_location: Optional[str] = None
+    num_of_partitions: int = Field(
+        ...,
+        description=(
+            "This script will generate a list of individual stacks, "
+            "and then partition the list into this number of partitions."
+        ),
+    )
+    partition_to_process: int = Field(
+        ...,
+        description=(
+            "Which partition of stacks to process. "
+        ),
+    )
+    # Other params
+
+
+class SmartspimCompressionJob(GenericEtl[SmartspimJobSettings]):
+    @staticmethod
+    def partition_list(lst: List, size: int):
+        """Partitions a list"""
+        for i in range(0, len(lst), size):
+            yield lst[i: i + size]
+
+    def _get_partitioned_list_of_stack_paths(self) -> List[Path]:
+        all_stack_paths = []
+        total_counter = 0
+        for channel in [
+            p
+            for p in Path(self.job_settings.input_source).iterdir()
+            if p.is_dir()
+        ]:
+            for col in [p for p in channel.iterdir() if p.is_dir()]:
+                for col_and_row in [p for p in col.iterdir() if p.is_dir()]:
+                    total_counter += 1
+                    all_stack_paths.append(col_and_row)
+        # Important to sort paths so every node computes the same list
+        all_stack_paths.sort(key=lambda x: str(x))
+        partition_size = int(
+            len(all_stack_paths) / self.job_settings.num_of_partitions
+        )
+
+        return list(
+            self.partition_list(all_stack_paths, partition_size)
+        )
+    
+    def run_job(self):
+        partitioned_list = self._get_partitioned_list_of_stack_paths()
+        stacks_to_process = partitioned_list[self.job_settings.partition_to_process]
+        print(f"Stacks to process: {stacks_to_process}")
+        # for stack in stacks_to_process:
+            # Method to process single stack using dask
+            # It'd be nice if there was an option to upload the stacks 
+            # and remove local files
 
 
 def main():
