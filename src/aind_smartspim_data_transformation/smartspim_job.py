@@ -24,7 +24,7 @@ from aind_smartspim_data_transformation.compress.dask_utils import (
 from aind_smartspim_data_transformation.compress.png_to_zarr import (
     smartspim_channel_zarr_writer,
 )
-from aind_smartspim_data_transformation.io import PngReader
+from aind_smartspim_data_transformation.io import PngReader, utils
 from aind_smartspim_data_transformation.models import CompressorName
 
 
@@ -219,6 +219,7 @@ class SmartspimCompressionJob2(GenericEtl[SmartspimJobSettings2]):
             data=None,
         )
 
+
 class SmartspimJobSettings(BasicJobSettings):
     """SmartspimCompressionJob settings."""
 
@@ -231,9 +232,7 @@ class SmartspimJobSettings(BasicJobSettings):
     )
     staging_directory: str = Field(
         ...,
-        description=(
-            "Where to write the data to locally."
-        ),
+        description=("Where to write the data to locally."),
     )
     s3_location: Optional[str] = None
     num_of_partitions: int = Field(
@@ -245,11 +244,39 @@ class SmartspimJobSettings(BasicJobSettings):
     )
     partition_to_process: int = Field(
         ...,
-        description=(
-            "Which partition of stacks to process. "
-        ),
+        description=("Which partition of stacks to process. "),
     )
-    # Other params
+    compressor_name: CompressorName = Field(
+        default=CompressorName.BLOSC,
+        description="Type of compressor to use.",
+        title="Compressor Name.",
+    )
+    # It will be safer if these kwargs fields were objects with known schemas
+    compressor_kwargs: dict = Field(
+        default={"cname": "zstd", "clevel": 3, "shuffle": Blosc.SHUFFLE},
+        description="Arguments to be used for the compressor.",
+        title="Compressor Kwargs",
+    )
+    compress_job_save_kwargs: dict = Field(
+        default={"n_jobs": -1},  # -1 to use all available cpu cores.
+        description="Arguments for recording save method.",
+        title="Compress Job Save Kwargs",
+    )
+    chunk_size: List[int] = Field(
+        default=[128, 128, 128],  # Default list with three integers
+        description="Chunk size in axis, a list of three integers",
+        title="Chunk Size",
+    )
+    scale_factor: List[int] = Field(
+        default=[2, 2, 2],  # Default list with three integers
+        description="Scale factors in axis, a list of three integers",
+        title="Scale Factors",
+    )
+    downsample_levels: int = Field(
+        default=4,
+        description="The number of levels of the image pyramid",
+        title="Downsample Levels",
+    )
 
 
 class SmartspimCompressionJob(GenericEtl[SmartspimJobSettings]):
@@ -257,14 +284,16 @@ class SmartspimCompressionJob(GenericEtl[SmartspimJobSettings]):
     def partition_list(lst: List, size: int):
         """Partitions a list"""
         for i in range(0, len(lst), size):
-            yield lst[i: i + size]
+            yield lst[i : i + size]
 
     def _get_partitioned_list_of_stack_paths(self) -> List[Path]:
         all_stack_paths = []
         total_counter = 0
         for channel in [
             p
-            for p in Path(self.job_settings.input_source).iterdir()
+            for p in Path(self.job_settings.input_source)
+            .joinpath("SmartSPIM")
+            .iterdir()
             if p.is_dir()
         ]:
             for col in [p for p in channel.iterdir() if p.is_dir()]:
@@ -277,17 +306,94 @@ class SmartspimCompressionJob(GenericEtl[SmartspimJobSettings]):
             len(all_stack_paths) / self.job_settings.num_of_partitions
         )
 
-        return list(
-            self.partition_list(all_stack_paths, partition_size)
-        )
-    
+        return list(self.partition_list(all_stack_paths, partition_size))
+
+    def _get_voxel_resolution(self, acquisition_path: str) -> List[int]:
+
+        if not acquisition_path.exists():
+            raise ValueError(
+                f"Acquisition path {acquisition_path} does not exist."
+            )
+
+        acquisition_config = utils.read_json_as_dict(acquisition_path)
+
+        # Grabbing a tile with metadata from acquisition - we assume all dataset
+        # was acquired with the same resolution
+        tile_coord_transforms = acquisition_config["tiles"][0][
+            "coordinate_transformations"
+        ]
+
+        scale_transform = [
+            x["scale"] for x in tile_coord_transforms if x["type"] == "scale"
+        ][0]
+
+        x = float(scale_transform[0])
+        y = float(scale_transform[1])
+        z = float(scale_transform[2])
+
+        return z, y, x
+
+    def _get_compressor(self) -> Blosc:
+        """
+        Utility method to construct a compressor class.
+        Returns
+        -------
+        Blosc
+          An instantiated Blosc compressor.
+
+        """
+        if self.job_settings.compressor_name == CompressorName.BLOSC:
+            return Blosc(**self.job_settings.compressor_kwargs)
+
+        return None
+
     def run_job(self):
+        acquisition_path = Path(self.job_settings.input_source).joinpath(
+            "acquisition.json"
+        )
+        voxel_size_zyx = self._get_voxel_resolution(
+            acquisition_path=acquisition_path
+        )
+
         partitioned_list = self._get_partitioned_list_of_stack_paths()
-        stacks_to_process = partitioned_list[self.job_settings.partition_to_process]
-        print(f"Stacks to process: {stacks_to_process}")
-        # for stack in stacks_to_process:
+        stacks_to_process = partitioned_list[
+            self.job_settings.partition_to_process
+        ]
+
+        # Getting compressors
+        compressor = self._get_compressor()
+
+        print(
+            f"Stacks to process: {stacks_to_process}, - Voxel res: {voxel_size_zyx}"
+        )
+
+        for stack in stacks_to_process:
+            logging.info(f"Converting {stack}")
+            output_path = self.job_settings.output_directory
+            channel_name = stack.parent.parent.name
+            stack_name = stack.name
+
+            if self.job_settings.s3_location is not None:
+                output_path = self.job_settings.s3_location
+
+            delayed_stack = PngReader(
+                data_path=f"{stack}/*.png"
+            ).as_dask_array()
+
+            smartspim_channel_zarr_writer(
+                image_data=delayed_stack,
+                output_path=output_path,
+                voxel_size=voxel_size_zyx,
+                final_chunksize=self.job_settings.chunk_size,
+                scale_factor=self.job_settings.scale_factor,
+                n_lvls=self.job_settings.downsample_levels,
+                channel_name=channel_name,
+                stack_name=f"{stack_name}.ome.zarr",
+                logger=logging,
+                writing_options=compressor,
+            )
             # Method to process single stack using dask
-            # It'd be nice if there was an option to upload the stacks 
+            # It'd be nice if there was an option to upload the stacks
             # and remove local files
 
 
@@ -312,5 +418,56 @@ def main():
     logging.info(job_response.model_dump_json())
 
 
+def get_col_row_len(input_source):
+    # Remove this function later?
+    from pathlib import Path
+
+    input_source = Path(input_source)
+
+    # Get any channel
+    first_channel = list(input_source.glob("Ex_*_Em_*"))[0]
+
+    # Get cols
+    cols = [folder for folder in first_channel.glob("*/") if folder.is_dir()]
+    n_cols = len(cols)
+
+    if not n_cols:
+        raise ValueError("No columns found!")
+
+    rows = [folder for folder in cols[0].glob("*/") if folder.is_dir()]
+    print("Rows: ", rows)
+    n_rows = len(rows)
+
+    if not n_rows:
+        raise ValueError("No rows found")
+
+    return n_cols, n_rows
+
+
+def main2():
+    input_source = "/allen/aind/scratch/svc_aind_upload/test_data_sets/smartspim/SmartSPIM_738819_2024-06-21_13-48-58"
+    staging_directory = "/allen/aind/scratch/svc_aind_upload/test_data_sets/smartspim/test_transform_outputs"
+    s3_location = "s3://aind-msma-morphology-data/test_data/SmartSPIM/test_data_transform/"
+    n_cols, n_rows = get_col_row_len(
+        input_source=Path(input_source).joinpath("SmartSPIM")
+    )
+    num_of_partitions = n_cols * n_rows
+
+    print("Number of partitions: ", num_of_partitions)
+
+    job_settings = SmartspimJobSettings(
+        input_source=input_source,
+        staging_directory=staging_directory,
+        s3_location=s3_location,
+        num_of_partitions=num_of_partitions,
+        partition_to_process=0,
+        output_directory="/allen/aind/scratch/svc_aind_upload/test_data_sets/smartspim/test_transform_outputs/",
+    )
+
+    job = SmartspimCompressionJob(job_settings=job_settings)
+    job_response = job.run_job()
+    # logging.info(job_response.model_dump_json())
+
+
 if __name__ == "__main__":
-    main()
+    main2()

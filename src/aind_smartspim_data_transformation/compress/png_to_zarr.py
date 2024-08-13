@@ -587,6 +587,7 @@ def smartspim_channel_zarr_writer(
         Logger object
 
     """
+
     # Getting channel color
     tmp_channel_name = channel_name.replace(".zarr", "")
     em_wav = int(tmp_channel_name.split("_")[-1])
@@ -596,7 +597,9 @@ def smartspim_channel_zarr_writer(
     image_data = image_data.rechunk(final_chunksize)
     image_data = pad_array_n_d(arr=image_data)
 
-    print(f"Writing {image_data} from {stack_name} in {output_path}")
+    image_name = stack_name
+
+    print(f"Writing {image_data} from {stack_name} to {output_path}")
 
     # Creating Zarr dataset
     store = parse_url(path=output_path, mode="w").store
@@ -628,14 +631,14 @@ def smartspim_channel_zarr_writer(
     channel_startend = [(0.0, 350.0) for _ in range(image_data.shape[1])]
 
     new_channel_group = root_group.create_group(
-        name=stack_name, overwrite=True
+        name=image_name, overwrite=True
     )
 
     # Writing OME-NGFF metadata
     write_ome_ngff_metadata(
         group=new_channel_group,
         arr=image_data,
-        image_name=channel_name,
+        image_name=image_name,
         n_lvls=n_lvls,
         scale_factors=scale_factor,
         voxel_size=voxel_size,
@@ -646,66 +649,62 @@ def smartspim_channel_zarr_writer(
         metadata=_get_pyramid_metadata(),
     )
 
-    performance_report_path = f"{output_path}/report_{stack_name}.html"
+    # performance_report_path = f"{output_path}/report_{stack_name}.html"
 
     start_time = time.time()
     # Writing zarr and performance report
-    with performance_report(filename=performance_report_path):
-        logger.info(f"{'='*40}Writing channel {channel_name}{'='*40}")
+    # with performance_report(filename=performance_report_path):
+    logger.info(f"Writing channel {channel_name}/{stack_name}")
 
-        # Writing zarr
-        block_shape = list(
-            BlockedArrayWriter.get_block_shape(
-                arr=image_data, target_size_mb=12800  # 51200,
+    # Writing zarr
+    block_shape = list(
+        BlockedArrayWriter.get_block_shape(
+            arr=image_data, target_size_mb=12800  # 51200,
+        )
+    )
+
+    # Formatting to 5D block shape
+    block_shape = ([1] * (5 - len(block_shape))) + block_shape
+    written_pyramid = []
+    pyramid_group = None
+
+    # Writing multiple levels
+    for level in range(n_lvls):
+        if not level:
+            array_to_write = image_data
+
+        else:
+            # It's faster to write the scale and then read it back
+            # to compute the next scale
+            previous_scale = da.from_zarr(pyramid_group, pyramid_group.chunks)
+            new_scale_factor = (
+                [1] * (len(previous_scale.shape) - len(scale_factor))
+            ) + scale_factor
+
+            previous_scale_pyramid, _ = compute_pyramid(
+                data=previous_scale,
+                scale_axis=new_scale_factor,
+                chunks=image_data.chunksize,
+                n_lvls=2,
             )
+            array_to_write = previous_scale_pyramid[-1]
+
+        logger.info(f"[level {level}]: pyramid level: {array_to_write}")
+
+        # Create the scale dataset
+        pyramid_group = new_channel_group.create_dataset(
+            name=level,
+            shape=array_to_write.shape,
+            chunks=array_to_write.chunksize,
+            dtype=array_to_write.dtype,
+            compressor=writing_options,
+            dimension_separator="/",
+            overwrite=True,
         )
 
-        # Formatting to 5D block shape
-        block_shape = ([1] * (5 - len(block_shape))) + block_shape
-        written_pyramid = []
-        pyramid_group = None
-
-        # Writing multiple levels
-        for level in range(n_lvls):
-            if not level:
-                array_to_write = image_data
-
-            else:
-                # It's faster to write the scale and then read it back
-                # to compute the next scale
-                previous_scale = da.from_zarr(
-                    pyramid_group, pyramid_group.chunks
-                )
-                new_scale_factor = (
-                    [1] * (len(previous_scale.shape) - len(scale_factor))
-                ) + scale_factor
-
-                previous_scale_pyramid, _ = compute_pyramid(
-                    data=previous_scale,
-                    scale_axis=new_scale_factor,
-                    chunks=image_data.chunksize,
-                    n_lvls=2,
-                )
-                array_to_write = previous_scale_pyramid[-1]
-
-            logger.info(f"[level {level}]: pyramid level: {array_to_write}")
-
-            # Create the scale dataset
-            pyramid_group = new_channel_group.create_dataset(
-                name=level,
-                shape=array_to_write.shape,
-                chunks=array_to_write.chunksize,
-                dtype=array_to_write.dtype,
-                compressor=writing_options,
-                dimension_separator="/",
-                overwrite=True,
-            )
-
-            # Block Zarr Writer
-            BlockedArrayWriter.store(
-                array_to_write, pyramid_group, block_shape
-            )
-            written_pyramid.append(array_to_write)
+        # Block Zarr Writer
+        BlockedArrayWriter.store(array_to_write, pyramid_group, block_shape)
+        written_pyramid.append(array_to_write)
 
     end_time = time.time()
     logger.info(f"Time to write the dataset: {end_time - start_time}")

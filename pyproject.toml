@@ -6,7 +6,7 @@ build-backend = "setuptools.build_meta"
 name = "aind-smartspim-data-transformation"
 description = "Generated from aind-library-template"
 license = {text = "MIT"}
-requires-python = ">=3.9"
+requires-python = ">=3.9.2"
 authors = [
     {name = "Allen Institute for Neural Dynamics"}
 ]
