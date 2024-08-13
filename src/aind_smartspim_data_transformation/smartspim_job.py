@@ -444,10 +444,10 @@ def get_col_row_len(input_source):
     return n_cols, n_rows
 
 
-def main2():
-    input_source = "/allen/aind/scratch/svc_aind_upload/test_data_sets/smartspim/SmartSPIM_738819_2024-06-21_13-48-58"
-    staging_directory = "/allen/aind/scratch/svc_aind_upload/test_data_sets/smartspim/test_transform_outputs"
-    s3_location = "s3://aind-msma-morphology-data/test_data/SmartSPIM/test_data_transform/"
+def local_test():
+    input_source = "/PATH/TO/UPLOAD/SmartSPIM_738819_2024-06-21_13-48-58"
+    staging_directory = "/PATH/TO/UPLOAD/test_transform_outputs"
+    s3_location = "s3://some/test/bucket/test_data_transform/"
     n_cols, n_rows = get_col_row_len(
         input_source=Path(input_source).joinpath("SmartSPIM")
     )
