@@ -1,0 +1,6 @@
+{
+   "input_source": "tests/resources/SmartSPIM_000000_2024-06-05_07-56-54",
+   "output_directory": "fake_output_dir",
+   "num_of_partitions": 4,
+   "partition_to_process": 0
+}

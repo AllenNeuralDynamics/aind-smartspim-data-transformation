@@ -48,7 +48,7 @@ def _closer_to_target(
     return shape2
 
 
-def expand_chunks(
+def expand_chunks(  # noqa: C901
     chunks: Tuple[int, int, int],
     data_shape: Tuple[int, int, int],
     target_size: int,
