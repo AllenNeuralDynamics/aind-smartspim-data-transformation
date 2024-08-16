@@ -20,7 +20,6 @@ from aind_smartspim_data_transformation.models import (
     CompressorName,
     SmartspimJobSettings,
 )
-from shutil import rmtree
 
 logging.basicConfig(level=os.getenv("LOG_LEVEL", "WARNING"))
 
