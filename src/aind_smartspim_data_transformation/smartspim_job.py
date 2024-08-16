@@ -104,6 +104,17 @@ class SmartspimCompressionJob(GenericEtl[SmartspimJobSettings]):
             return None
 
     def _write_stacks(self, stacks_to_process: List) -> None:
+        """
+        Write a list of stacks.
+        Parameters
+        ----------
+        stacks_to_process : List
+
+        Returns
+        -------
+        None
+
+        """
         compressor = self._get_compressor()
         acquisition_path = Path(self.job_settings.input_source).joinpath(
             "acquisition.json"
@@ -146,15 +157,22 @@ class SmartspimCompressionJob(GenericEtl[SmartspimJobSettings]):
                 s3_channel_zgroup_file = (
                     f"{self.job_settings.s3_location}/{channel_name}/.zgroup"
                 )
-                logging.info(f"Uploading {channel_zgroup_file} to {s3_channel_zgroup_file}")
+                logging.info(
+                    f"Uploading {channel_zgroup_file} to "
+                    f"{s3_channel_zgroup_file}"
+                )
                 utils.copy_file_to_s3(
-                    channel_zgroup_file,
-                    s3_channel_zgroup_file
+                    channel_zgroup_file, s3_channel_zgroup_file
                 )
                 ome_zarr_stack_name = f"{stack_name}.ome.zarr"
                 ome_zarr_stack_path = output_path.joinpath(ome_zarr_stack_name)
-                s3_stack_dir = f"{self.job_settings.s3_location}/{channel_name}/{ome_zarr_stack_name}"
-                logging.info(f"Uploading {ome_zarr_stack_path} to {s3_stack_dir}")
+                s3_stack_dir = (
+                    f"{self.job_settings.s3_location}/{channel_name}/"
+                    f"{ome_zarr_stack_name}"
+                )
+                logging.info(
+                    f"Uploading {ome_zarr_stack_path} to {s3_stack_dir}"
+                )
                 utils.sync_dir_to_s3(ome_zarr_stack_path, s3_stack_dir)
                 logging.info(f"Removing: {ome_zarr_stack_path}")
                 # Remove stack if uploaded to s3. We can potentially do all

@@ -1,10 +1,10 @@
 """Tests methods in io.readers module"""
 
-from aind_smartspim_data_transformation.io.readers import PngReader
-import unittest
-
-from pathlib import Path
 import os
+import unittest
+from pathlib import Path
+
+from aind_smartspim_data_transformation.io.readers import PngReader
 
 RESOURCES_DIR = (
     Path(os.path.dirname(os.path.realpath(__file__))) / ".." / "resources"

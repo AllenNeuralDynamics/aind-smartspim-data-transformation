@@ -4,7 +4,7 @@ import json
 import os
 import unittest
 from pathlib import Path
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
 
 from numcodecs.blosc import Blosc
 
@@ -136,10 +136,13 @@ class SmartspimCompressionTest(unittest.TestCase):
         mock_parser.parse_args.return_value.job_settings = json_settings
         mock_get_parser.return_value = mock_parser
         sys_args = ["", "-j", f"' {json_settings}' "]
+        mock_response = MagicMock()
+        mock_response.model_dump_json.return_value = json.dumps(
+            {"message": "ran job"}
+        )
+        mock_run_job.return_value = mock_response
         job_entrypoint(sys_args)
-        mock_run_job.return_value = {"message": "ran job"}
-        # job_main(sys_args)
-        # mock_run_job.assert_called()
+        mock_run_job.assert_called()
 
     @patch(
         "aind_smartspim_data_transformation.smartspim_job"
@@ -156,10 +159,13 @@ class SmartspimCompressionTest(unittest.TestCase):
         mock_parser.parse_args.return_value.config_file = config_file
         mock_get_parser.return_value = mock_parser
         sys_args = ["", "--config-file", f"{config_file}"]
+        mock_response = MagicMock()
+        mock_response.model_dump_json.return_value = json.dumps(
+            {"message": "ran job"}
+        )
+        mock_run_job.return_value = mock_response
         job_entrypoint(sys_args)
-        mock_run_job.return_value = {"message": "ran job"}
-        # job_main(sys_args)
-        # mock_run_job.assert_called()
+        mock_run_job.assert_called()
 
     @patch.dict(
         os.environ,
@@ -179,72 +185,20 @@ class SmartspimCompressionTest(unittest.TestCase):
     def test_job_entrypoint_env_vars(
         self, mock_get_parser: MagicMock, mock_run_job: MagicMock
     ):
+        """Tests job_entrypoint method"""
 
         mock_parser = MagicMock()
         mock_parser.parse_args.return_value.job_settings = None
         mock_parser.parse_args.return_value.config_file = None
         mock_get_parser.return_value = mock_parser
         sys_args = [""]
+        mock_response = MagicMock()
+        mock_response.model_dump_json.return_value = json.dumps(
+            {"message": "ran job"}
+        )
+        mock_run_job.return_value = mock_response
         job_entrypoint(sys_args)
-        mock_run_job.return_value = {"message": "ran job"}
-
-    # aind_smartspim_data_transformation.compress.png_to_zarr.smartspim_channel_zarr_writer
-
-    # def test_get_delayed_channel_stack(self):
-    #     """Tests reading stacks of png images."""
-    #
-    #     raw_path = self.basic_job.job_settings.input_source / "SmartSPIM"
-    #
-    #     channel_paths = [
-    #         Path(raw_path).joinpath(folder) for folder in os.listdir(raw_path)
-    #     ]
-    #
-    #     # Get channel stack iterators and delayed arrays
-    #     read_delayed_channel_stacks = (
-    #         self.basic_job._get_delayed_channel_stack(
-    #             channel_paths=channel_paths,
-    #             output_dir=self.basic_job.job_settings.output_directory,
-    #         )
-    #     )
-    #
-    #     stacked_shape = (2, 1600, 2000)
-    #     dtype = np.uint16
-    #     extensions = [".ome", ".zarr"]
-    #
-    #     for delayed_arr, _, stack_name in read_delayed_channel_stacks:
-    #         self.assertEqual(stacked_shape, delayed_arr.shape)
-    #         self.assertEqual(dtype, delayed_arr.dtype)
-    #         self.assertEqual(extensions, Path(stack_name).suffixes)
-    #
-    # def test_compressor(self):
-    #     """Test compression with Blosc"""
-    #     compressor = self.basic_job._get_compressor()
-    #     current_blosc = Blosc(**self.basic_job.job_settings.compressor_kwargs)
-    #     self.assertEqual(compressor, current_blosc)
-    #
-    # def test_getting_compressor_fail(self):
-    #     """Test failed compression with Blosc"""
-    #
-    #     with self.assertRaises(Exception):
-    #         # Failed blosc compressor
-    #         failed_basic_job_settings = SmartspimJobSettings(
-    #             input_source=DATA_DIR,
-    #             output_directory=Path("output_dir"),
-    #             compressor_name="not_blosc",
-    #         )
-    #
-    #         failed_basic_job_settings = failed_basic_job_settings
-    #         SmartspimCompressionJob(job_settings=failed_basic_job_settings)
-    #
-    # def test_run_job(self):
-    #     """Tests SmartSPIM compression and zarr writing"""
-    #     self.basic_job.run_job()
-    #
-    # @classmethod
-    # def tearDownClass(cls) -> None:
-    #     """Tear down class method to clean up"""
-    #     if os.path.exists(cls.temp_folder):
-    #         shutil.rmtree(cls.temp_folder, ignore_errors=True)
+        mock_run_job.assert_called()
 
 
 if __name__ == "__main__":
