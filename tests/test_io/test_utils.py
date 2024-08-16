@@ -11,16 +11,15 @@ import numpy as np
 
 from aind_smartspim_data_transformation.io import utils
 
+RESOURCES_DIR = (
+    Path(os.path.dirname(os.path.realpath(__file__))) / ".." / "resources"
+)
+
+JSON_FILE_PATH = RESOURCES_DIR / "local_json.json"
+
 
 class IoUtilitiesTest(unittest.TestCase):
     """Class for testing the io utilities"""
-
-    def setUp(self):
-        """Setting up temporary folder directory"""
-        current_path = Path(os.path.abspath(__file__)).parent
-        self.test_local_json_path = current_path.joinpath(
-            "../resources/local_json.json"
-        )
 
     def test_add_leading_dim(self):
         """
@@ -80,5 +79,9 @@ class IoUtilitiesTest(unittest.TestCase):
         Tests successful reading of a dictionary
         """
         expected_result = {"some_key": "some_value"}
-        result = utils.read_json_as_dict(self.test_local_json_path)
+        result = utils.read_json_as_dict(JSON_FILE_PATH)
         self.assertEqual(expected_result, result)
+
+
+if __name__ == "__main__":
+    unittest.main()

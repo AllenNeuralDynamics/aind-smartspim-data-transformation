@@ -6,11 +6,8 @@ writes it in OME-Zarr format
 """
 
 import logging
-import multiprocessing
 import os
 import time
-from datetime import datetime
-from pathlib import Path
 from typing import Dict, Hashable, List, Optional, Sequence, Tuple, Union, cast
 
 import dask
@@ -19,52 +16,19 @@ import numpy as np
 import pims
 import xarray_multiscale
 import zarr
-from dask import config as da_cfg
 from dask.array.core import Array
 from dask.base import tokenize
-from dask.distributed import Client, LocalCluster, performance_report
-
-# from distributed import wait
 from numcodecs import blosc
 from ome_zarr.format import CurrentFormat
 from ome_zarr.io import parse_url
 from ome_zarr.writer import write_multiscales_metadata
 from skimage.io import imread as sk_imread
 
-from aind_smartspim_data_transformation._shared.types import (
-    ArrayLike,
-    PathLike,
-)
 from aind_smartspim_data_transformation.compress.zarr_writer import (
     BlockedArrayWriter,
 )
-from aind_smartspim_data_transformation.io import PngReader
 from aind_smartspim_data_transformation.io.utils import pad_array_n_d
-
-
-def set_dask_config(dask_folder: str):
-    """
-    Sets dask configuration
-
-    Parameters
-    ----------
-    dask_folder: str
-        Path to the temporary directory and local directory
-        of workers in dask.
-    """
-    # Setting dask configuration
-    da_cfg.set(
-        {
-            "temporary-directory": dask_folder,
-            "local_directory": dask_folder,
-            # "tcp-timeout": "300s",
-            "array.chunk-size": "128MiB",
-            "distributed.worker.memory.target": 0.90,  # 0.85,
-            "distributed.worker.memory.spill": 0.92,  # False,#
-            "distributed.worker.memory.pause": 0.95,  # False,#
-            "distributed.worker.memory.terminate": 0.98,
-        }
-    )
+from aind_smartspim_data_transformation.models import ArrayLike, PathLike
 
 
 def _build_ome(
@@ -710,133 +674,3 @@ def smartspim_channel_zarr_writer(
     logger.info(f"Time to write the dataset: {end_time - start_time}")
     print(f"Time to write the dataset: {end_time - start_time}")
     logger.info(f"Written pyramid: {written_pyramid}")
-
-
-def convert_stacks_to_ome_zarr(channel_path, logger, output_path):
-    """
-    Converts image stacks from PNG to OMEZarr.
-
-    Parameters
-    ----------
-    channel_path: str
-        Path where the stacks for the channel
-        are located.
-
-    logger: logging.Logger
-        Logging object
-
-    output_path: str
-        Path where we want to write the converted
-        stacks to OMEZarr.
-
-    """
-    # channel_path must end with Ex_{wav}_Em_{wav}
-
-    # Setting up local cluster
-    n_workers = multiprocessing.cpu_count()
-    logger.info(f"Setting {n_workers} workers")
-    threads_per_worker = 1
-
-    # Instantiating local cluster for parallel writing
-    cluster = LocalCluster(
-        n_workers=n_workers,
-        threads_per_worker=threads_per_worker,
-        processes=True,
-        memory_limit="auto",
-    )
-
-    client = Client(cluster)
-
-    cols = os.listdir(channel_path)
-    for col in cols:
-        curr_col = channel_path.joinpath(col)
-        for row in os.listdir(curr_col):
-            curr_row = curr_col.joinpath(row)
-            delayed_stack = PngReader(
-                data_path=f"{curr_row}/*.png"
-            ).as_dask_array()
-            print(f"Writing curr stack {curr_row}: {delayed_stack}")
-
-            smartspim_channel_zarr_writer(
-                image_data=delayed_stack,
-                output_path=Path(output_path).joinpath(f"{channel_path.stem}"),
-                voxel_size=[2.0, 1.8, 1.8],
-                final_chunksize=(128, 128, 128),
-                scale_factor=[2, 2, 2],
-                codec="zstd",
-                compression_level=0,
-                n_lvls=4,
-                channel_name=channel_path.stem,
-                logger=logger,
-                stack_name=f"{col}_{row.split('_')[-1]}.zarr",
-                client=client,
-            )
-
-
-def create_logger(output_log_path: PathLike) -> logging.Logger:
-    """
-    Creates a logger that generates
-    output logs to a specific path.
-
-    Parameters
-    ------------
-    output_log_path: PathLike
-        Path where the log is going
-        to be stored
-
-    Returns
-    -----------
-    logging.Logger
-        Created logger pointing to
-        the file path.
-    """
-    CURR_DATE_TIME = datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
-    LOGS_FILE = f"{output_log_path}/fusion_log_{CURR_DATE_TIME}.log"
-
-    logging.basicConfig(
-        level=logging.DEBUG,
-        format="%(asctime)s - %(levelname)s : %(message)s",
-        datefmt="%Y-%m-%d %H:%M",
-        handlers=[
-            logging.StreamHandler(),
-            logging.FileHandler(LOGS_FILE, "a"),
-        ],
-        force=True,
-    )
-
-    logging.disable("DEBUG")
-    logger = logging.getLogger(__name__)
-    logger.setLevel(logging.DEBUG)
-
-    return logger
-
-
-def main():
-    """
-    Main function in how to use these functions
-    """
-
-    data_folder = Path(os.path.abspath("../data"))
-    results_folder = Path(os.path.abspath("../results"))
-    scratch_folder = Path(os.path.abspath("../scratch"))
-
-    set_dask_config(dask_folder=scratch_folder)
-
-    logger = create_logger(output_log_path=results_folder)
-
-    BASE_PATH = data_folder.joinpath(
-        "SmartSPIM_692911_2023-10-23_11-27-30/SmartSPIM"
-    )
-
-    channels = os.listdir(str(BASE_PATH))
-
-    for channel in channels:
-        convert_stacks_to_ome_zarr(
-            channel_path=BASE_PATH.joinpath(channel),
-            logger=logger,
-            output_path=results_folder,
-        )
-
-
-if __name__ == "__main__":
-    main()

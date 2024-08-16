@@ -59,3 +59,7 @@ class ZarrWriterTest(unittest.TestCase):
 
         self.assertEqual(test_arr_1.shape, shape_close_target)
         self.assertEqual(test_arr_1.shape, shape_close_target_2)
+
+
+if __name__ == "__main__":
+    unittest.main()
