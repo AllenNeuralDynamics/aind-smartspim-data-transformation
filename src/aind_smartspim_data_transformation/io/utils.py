@@ -4,11 +4,13 @@ Utility functions for image readers
 
 import json
 import os
+import platform
+import subprocess
 from typing import Optional
 
 import numpy as np
 
-from aind_smartspim_data_transformation._shared.types import ArrayLike
+from aind_smartspim_data_transformation.models import ArrayLike, PathLike
 
 
 def add_leading_dim(data: ArrayLike):
@@ -106,7 +108,7 @@ def extract_data(
     return arr[tuple(dynamic_indices)]
 
 
-def read_json_as_dict(filepath: str) -> dict:
+def read_json_as_dict(filepath: PathLike) -> dict:
     """
     Reads a json as dictionary.
 
@@ -131,3 +133,69 @@ def read_json_as_dict(filepath: str) -> dict:
             dictionary = json.load(json_file)
 
     return dictionary
+
+
+def sync_dir_to_s3(directory_to_upload: PathLike, s3_location: str) -> None:
+    """
+    Syncs a local directory to an s3 location by running aws cli in a
+    subprocess.
+
+    Parameters
+    ----------
+    directory_to_upload : PathLike
+    s3_location : str
+
+    Returns
+    -------
+    None
+
+    """
+    # Upload to s3
+    if platform.system() == "Windows":
+        shell = True
+    else:
+        shell = False
+
+    base_command = [
+        "aws",
+        "s3",
+        "sync",
+        str(directory_to_upload),
+        s3_location,
+        "--only-show-errors",
+    ]
+
+    subprocess.run(base_command, shell=shell, check=True)
+
+
+def copy_file_to_s3(file_to_upload: PathLike, s3_location: str) -> None:
+    """
+    Syncs a local directory to an s3 location by running aws cli in a
+    subprocess.
+
+    Parameters
+    ----------
+    file_to_upload : PathLike
+    s3_location : str
+
+    Returns
+    -------
+    None
+
+    """
+    # Upload to s3
+    if platform.system() == "Windows":
+        shell = True
+    else:
+        shell = False
+
+    base_command = [
+        "aws",
+        "s3",
+        "cp",
+        str(file_to_upload),
+        s3_location,
+        "--only-show-errors",
+    ]
+
+    subprocess.run(base_command, shell=shell, check=True)

@@ -1,89 +1,37 @@
 """Module to handle smartspim data compression"""
 
 import logging
+import os
+import shutil
 import sys
 from pathlib import Path
-from typing import List, Optional, Any
-
-from aind_data_transformation.core import (
-    BasicJobSettings,
-    GenericEtl,
-    JobResponse,
-    get_parser,
-)
-from numcodecs.blosc import Blosc
 from time import time
-from pydantic import Field
+from typing import Any, List, Optional
+
+from aind_data_transformation.core import GenericEtl, JobResponse, get_parser
+from numcodecs.blosc import Blosc
+
 from aind_smartspim_data_transformation.compress.png_to_zarr import (
     smartspim_channel_zarr_writer,
 )
-from aind_smartspim_data_transformation.io import PngReader, utils
-from aind_smartspim_data_transformation.models import CompressorName
+from aind_smartspim_data_transformation.io import utils
+from aind_smartspim_data_transformation.io.readers import PngReader
+from aind_smartspim_data_transformation.models import (
+    CompressorName,
+    SmartspimJobSettings,
+)
+from shutil import rmtree
 
-
-class SmartspimJobSettings(BasicJobSettings):
-    """SmartspimCompressionJob settings."""
-
-    input_source: str = Field(
-        ...,
-        description=(
-            "Source of the SmartSPIM channel data. For example, "
-            "/scratch/SmartSPIM_695464_2023-10-18_20-30-30/SmartSPIM"
-        ),
-    )
-    output_directory: str = Field(
-        ...,
-        description=("Where to write the data to locally."),
-    )
-    s3_location: Optional[str] = None
-    num_of_partitions: int = Field(
-        ...,
-        description=(
-            "This script will generate a list of individual stacks, "
-            "and then partition the list into this number of partitions."
-        ),
-    )
-    partition_to_process: int = Field(
-        ...,
-        description=("Which partition of stacks to process. "),
-    )
-    compressor_name: CompressorName = Field(
-        default=CompressorName.BLOSC,
-        description="Type of compressor to use.",
-        title="Compressor Name.",
-    )
-    # It will be safer if these kwargs fields were objects with known schemas
-    compressor_kwargs: dict = Field(
-        default={"cname": "zstd", "clevel": 3, "shuffle": Blosc.SHUFFLE},
-        description="Arguments to be used for the compressor.",
-        title="Compressor Kwargs",
-    )
-    compress_job_save_kwargs: dict = Field(
-        default={"n_jobs": -1},  # -1 to use all available cpu cores.
-        description="Arguments for recording save method.",
-        title="Compress Job Save Kwargs",
-    )
-    chunk_size: List[int] = Field(
-        default=[128, 128, 128],  # Default list with three integers
-        description="Chunk size in axis, a list of three integers",
-        title="Chunk Size",
-    )
-    scale_factor: List[int] = Field(
-        default=[2, 2, 2],  # Default list with three integers
-        description="Scale factors in axis, a list of three integers",
-        title="Scale Factors",
-    )
-    downsample_levels: int = Field(
-        default=4,
-        description="The number of levels of the image pyramid",
-        title="Downsample Levels",
-    )
+logging.basicConfig(level=os.getenv("LOG_LEVEL", "WARNING"))
 
 
 class SmartspimCompressionJob(GenericEtl[SmartspimJobSettings]):
+    """Job to handle compressing and uploading SmartSPIM data."""
 
     @staticmethod
-    def partition_list(lst: List[Any], num_of_partitions: int) -> List[List[Any]]:
+    def partition_list(
+        lst: List[Any], num_of_partitions: int
+    ) -> List[List[Any]]:
         """Partitions a list"""
         accumulated_list = []
         for _ in range(num_of_partitions):
@@ -94,6 +42,8 @@ class SmartspimCompressionJob(GenericEtl[SmartspimJobSettings]):
         return accumulated_list
 
     def _get_partitioned_list_of_stack_paths(self) -> List[List[Path]]:
+        """Scans through the input source and partitions a list of stack
+        paths that it finds there."""
         all_stack_paths = []
         total_counter = 0
         for channel in [
@@ -109,19 +59,23 @@ class SmartspimCompressionJob(GenericEtl[SmartspimJobSettings]):
                     all_stack_paths.append(col_and_row)
         # Important to sort paths so every node computes the same list
         all_stack_paths.sort(key=lambda x: str(x))
-        return self.partition_list(all_stack_paths, self.job_settings.num_of_partitions)
+        return self.partition_list(
+            all_stack_paths, self.job_settings.num_of_partitions
+        )
 
-    def _get_voxel_resolution(self, acquisition_path: str) -> List[int]:
+    @staticmethod
+    def _get_voxel_resolution(acquisition_path: Path) -> List[float]:
+        """Get the voxel resolution from an acquisition.json file."""
 
-        if not acquisition_path.exists():
-            raise ValueError(
-                f"Acquisition path {acquisition_path} does not exist."
+        if not acquisition_path.is_file():
+            raise FileNotFoundError(
+                f"acquisition.json file not found at: {acquisition_path}"
             )
 
         acquisition_config = utils.read_json_as_dict(acquisition_path)
 
-        # Grabbing a tile with metadata from acquisition - we assume all dataset
-        # was acquired with the same resolution
+        # Grabbing a tile with metadata from acquisition - we assume all
+        # dataset was acquired with the same resolution
         tile_coord_transforms = acquisition_config["tiles"][0][
             "coordinate_transformations"
         ]
@@ -134,55 +88,42 @@ class SmartspimCompressionJob(GenericEtl[SmartspimJobSettings]):
         y = float(scale_transform[1])
         z = float(scale_transform[2])
 
-        return z, y, x
+        return [z, y, x]
 
-    def _get_compressor(self) -> Blosc:
+    def _get_compressor(self) -> Optional[Blosc]:
         """
         Utility method to construct a compressor class.
         Returns
         -------
-        Blosc
-          An instantiated Blosc compressor.
+        Blosc | None
+          An instantiated Blosc compressor. Return None if not set in configs.
 
         """
         if self.job_settings.compressor_name == CompressorName.BLOSC:
             return Blosc(**self.job_settings.compressor_kwargs)
+        else:
+            return None
 
-        return None
-
-    def run_job(self):
-        job_start_time = time()
+    def _write_stacks(self, stacks_to_process: List) -> None:
+        compressor = self._get_compressor()
         acquisition_path = Path(self.job_settings.input_source).joinpath(
             "acquisition.json"
         )
         voxel_size_zyx = self._get_voxel_resolution(
             acquisition_path=acquisition_path
         )
-
-        partitioned_list = self._get_partitioned_list_of_stack_paths()
-        stacks_to_process = partitioned_list[
-            self.job_settings.partition_to_process
-        ]
-
-        # Getting compressors
-        compressor = self._get_compressor()
-
-        print(
-            f"Stacks to process: {stacks_to_process}, - Voxel res: {voxel_size_zyx}"
+        logging.info(
+            f"Stacks to process: {stacks_to_process}, - Voxel res: "
+            f"{voxel_size_zyx}"
         )
-
         for stack in stacks_to_process:
             logging.info(f"Converting {stack}")
             channel_name = stack.parent.parent.name
             stack_name = stack.name
 
-            if self.job_settings.s3_location is not None:
-                output_path = (
-                    f"{self.job_settings.s3_location.rstrip('/')}/"
-                    f"{channel_name.rstrip}"
-                )
-            else:
-                output_path = Path(self.job_settings.output_directory).joinpath(channel_name)
+            output_path = Path(self.job_settings.output_directory).joinpath(
+                channel_name
+            )
 
             delayed_stack = PngReader(
                 data_path=f"{stack}/*.png"
@@ -200,19 +141,47 @@ class SmartspimCompressionJob(GenericEtl[SmartspimJobSettings]):
                 logger=logging,
                 writing_options=compressor,
             )
-            # Method to process single stack using dask
-            # It'd be nice if there was an option to upload the stacks
-            # and remove local files
-        total_job_duration = job_start_time - time()
+
+            if self.job_settings.s3_location is not None:
+                channel_zgroup_file = output_path / ".zgroup"
+                s3_channel_zgroup_file = (
+                    f"{self.job_settings.s3_location}/{channel_name}/.zgroup"
+                )
+                logging.info(f"Uploading {channel_zgroup_file} to {s3_channel_zgroup_file}")
+                utils.copy_file_to_s3(
+                    channel_zgroup_file,
+                    s3_channel_zgroup_file
+                )
+                ome_zarr_stack_name = f"{stack_name}.ome.zarr"
+                ome_zarr_stack_path = output_path.joinpath(ome_zarr_stack_name)
+                s3_stack_dir = f"{self.job_settings.s3_location}/{channel_name}/{ome_zarr_stack_name}"
+                logging.info(f"Uploading {ome_zarr_stack_path} to {s3_stack_dir}")
+                utils.sync_dir_to_s3(ome_zarr_stack_path, s3_stack_dir)
+                logging.info(f"Removing: {ome_zarr_stack_path}")
+                # Remove stack if uploaded to s3. We can potentially do all
+                # the stacks in the partition in parallel using dask to speed
+                # this up
+                shutil.rmtree(ome_zarr_stack_path)
+
+    def run_job(self):
+        """Main entrypoint to run the job."""
+        job_start_time = time()
+
+        partitioned_list = self._get_partitioned_list_of_stack_paths()
+        stacks_to_process = partitioned_list[
+            self.job_settings.partition_to_process
+        ]
+
+        self._write_stacks(stacks_to_process=stacks_to_process)
+        total_job_duration = time() - job_start_time
         return JobResponse(
-            status_code=200,
-            message=f"Job finished in {total_job_duration}"
+            status_code=200, message=f"Job finished in {total_job_duration}"
         )
 
 
-def main():
+# TODO: Add this to core aind_data_transformation class
+def job_entrypoint(sys_args: list):
     """Main function"""
-    sys_args = sys.argv[1:]
     parser = get_parser()
     cli_args = parser.parse_args(sys_args)
     if cli_args.job_settings is not None:
@@ -232,5 +201,4 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
-
+    job_entrypoint(sys.argv[1:])
