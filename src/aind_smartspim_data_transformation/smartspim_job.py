@@ -191,7 +191,7 @@ class SmartspimCompressionJob(GenericEtl[SmartspimJobSettings]):
         )
 
         if not derivatives_path.exists():
-            raise FileNotFoundError(f"Derivatives path {derivatives_path} does not exist.")
+            raise FileNotFoundError(f"{derivatives_path} does not exist.")
 
         if self.job_settings.s3_location is not None:
             logging.info(
