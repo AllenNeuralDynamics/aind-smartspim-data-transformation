@@ -189,12 +189,16 @@ class SmartspimCompressionJob(GenericEtl[SmartspimJobSettings]):
         derivatives_path = Path(self.job_settings.input_source).joinpath(
             "derivatives"
         )
+
+        if not derivatives_path.exists():
+            raise FileNotFoundError(f"Derivatives path {derivatives_path} does not exist.")
+
         if self.job_settings.s3_location is not None:
             logging.info(
                 f"Uploading {derivatives_path} to {s3_derivatives_dir}"
             )
             utils.sync_dir_to_s3(derivatives_path, s3_derivatives_dir)
-            logging.info(f"Removing: {derivatives_path}")
+            logging.info(f"{derivatives_path} uploaded to s3.")
 
     def run_job(self):
         """Main entrypoint to run the job."""
