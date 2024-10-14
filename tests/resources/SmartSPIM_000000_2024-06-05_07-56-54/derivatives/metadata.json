@@ -1,0 +1,55 @@
+{
+    "session_config": {
+      "Destripe": "N/0",
+      "Empty": "Blank",
+      "Flat": "None",
+      "Immersion": "ECi",
+      "Obj": "LCT 3.6x",
+      "Sampling": "1/1",
+      "Scanning": "Fast",
+      "V_Res": "1600",
+      "Version": "5.4.0.3",
+      "Z step": "2.00",
+      "Z_Block": "5951",
+      "obj_magnification": "3.600000",
+      "um/pix": "1.800"
+    },
+    "tile_config": {
+      "t_0": {
+        "Exposure": "2",
+        "Filter": "1",
+        "Laser": "488",
+        "Side": "0",
+        "Skip": "1",
+        "X": "439030",
+        "Y": "262420",
+        "Z": "977"
+      }
+    },
+    "wavelength_config": {
+        "445": {
+            "power_left": "20.00",
+            "power_right": "20.00"
+        },
+        "488": {
+            "power_left": "66.67",
+            "power_right": "80.00"
+        },
+        "561": {
+            "power_left": "54.55",
+            "power_right": "60.00"
+        },
+        "594": {
+            "power_left": "20.00",
+            "power_right": "20.00"
+        },
+        "639": {
+            "power_left": "90.00",
+            "power_right": "100.00"
+        },
+        "665": {
+            "power_left": "20.00",
+            "power_right": "20.00"
+        }
+    }
+}
