@@ -27,7 +27,8 @@ dependencies = [
     'ome-zarr==0.8.2',
     'imagecodecs[all]==2023.3.16',
     'natsort==8.4.0',
-    'bokeh==3.4.1'
+    'bokeh==3.4.1',
+    'numpy<=2.0'
 ]
 
 [project.optional-dependencies]
