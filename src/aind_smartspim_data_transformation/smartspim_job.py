@@ -180,11 +180,35 @@ class SmartspimCompressionJob(GenericEtl[SmartspimJobSettings]):
                 # this up
                 shutil.rmtree(ome_zarr_stack_path)
 
+    def _upload_derivatives_folder(self):
+        """
+        Uploads the derivatives folder inside of
+        the SPIM folder in the cloud.
+        """
+        s3_derivatives_dir = f"{self.job_settings.s3_location}/derivatives"
+        derivatives_path = Path(self.job_settings.input_source).joinpath(
+            "derivatives"
+        )
+
+        if not derivatives_path.exists():
+            raise FileNotFoundError(f"{derivatives_path} does not exist.")
+
+        if self.job_settings.s3_location is not None:
+            logging.info(
+                f"Uploading {derivatives_path} to {s3_derivatives_dir}"
+            )
+            utils.sync_dir_to_s3(derivatives_path, s3_derivatives_dir)
+            logging.info(f"{derivatives_path} uploaded to s3.")
+
     def run_job(self):
         """Main entrypoint to run the job."""
         job_start_time = time()
 
         partitioned_list = self._get_partitioned_list_of_stack_paths()
+        # Upload derivatives folder
+        if self.job_settings.partition_to_process == 0:
+            self._upload_derivatives_folder()
+
         stacks_to_process = partitioned_list[
             self.job_settings.partition_to_process
         ]
