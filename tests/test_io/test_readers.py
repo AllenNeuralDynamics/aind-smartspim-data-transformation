@@ -4,7 +4,7 @@ import os
 import unittest
 from pathlib import Path
 
-from aind_smartspim_data_transformation.io.readers import PngReader
+from aind_smartspim_data_transformation.io.readers import PngTiffReader
 
 RESOURCES_DIR = (
     Path(os.path.dirname(os.path.realpath(__file__))) / ".." / "resources"
@@ -21,13 +21,13 @@ STACK_DIR = (
 )
 
 
-class TestPngReader(unittest.TestCase):
-    """Tests methods in PngReader class"""
+class TestPngTiffReader(unittest.TestCase):
+    """Tests methods in PngTiffReader class"""
 
     @classmethod
     def setUpClass(cls):
         """Sets up class with common reader"""
-        cls.reader = PngReader(STACK_DIR)
+        cls.reader = PngTiffReader(STACK_DIR)
 
     def test_shape(self):
         """Tests shape method"""
@@ -45,7 +45,7 @@ class TestPngReader(unittest.TestCase):
 
     def test_data_path_setter(self):
         """Tests data_path_setter"""
-        reader = PngReader(STACK_DIR)
+        reader = PngTiffReader(STACK_DIR)
         reader.data_path = "tests"
         self.assertEqual("tests", reader.data_path)
 

@@ -98,7 +98,7 @@ class SmartspimCompressionTest(unittest.TestCase):
         """Tests _get_compressor method returns None if no config set"""
 
         job_settings = SmartspimJobSettings.model_construct(
-            compressor_name="foo"
+            input_source="", output_directory="", compressor_name="foo"
         )
         job = SmartspimCompressionJob(job_settings=job_settings)
         compressor = job._get_compressor()
