@@ -109,9 +109,9 @@ class ImageReader(ABC):
         self.__data_path = new_data_path
 
 
-class PngReader(ImageReader):
+class PngTiffReader(ImageReader):
     """
-    PngReader class
+    PngTiffReader class
     """
 
     def __init__(self, data_path: PathLike) -> None:

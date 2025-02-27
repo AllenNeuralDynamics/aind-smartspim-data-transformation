@@ -15,7 +15,7 @@ from aind_smartspim_data_transformation.compress.png_to_zarr import (
     smartspim_channel_zarr_writer,
 )
 from aind_smartspim_data_transformation.io import utils
-from aind_smartspim_data_transformation.io.readers import PngReader
+from aind_smartspim_data_transformation.io.readers import PngTiffReader
 from aind_smartspim_data_transformation.models import (
     CompressorName,
     SmartspimJobSettings,
@@ -135,8 +135,22 @@ class SmartspimCompressionJob(GenericEtl[SmartspimJobSettings]):
                 channel_name
             )
 
-            delayed_stack = PngReader(
-                data_path=f"{stack}/*.png"
+            image_files = list(stack.glob("*"))
+            if not image_files:
+                raise FileNotFoundError(f"No images found in {stack}")
+
+            # Note: SmartSPIM should have a single type of
+            # extension per dataset. There should not be tifs and pngs
+            # extensions = {f.suffix.lower() for f in image_files}
+            extension = image_files[0].suffix.lower().lstrip(".")
+
+            if extension not in ["png", "tif", "tiff"]:
+                raise ValueError(
+                    f"Extension {extension} is not valid! Only PNGs and Tiff."
+                )
+
+            delayed_stack = PngTiffReader(
+                data_path=f"{stack}/*.{extension}"
             ).as_dask_array()
 
             smartspim_channel_zarr_writer(
