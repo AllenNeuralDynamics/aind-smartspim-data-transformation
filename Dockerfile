@@ -16,5 +16,3 @@ COPY src ./src
 RUN pip install --no-cache-dir pip setuptools setuptools-scm && \
     pip install --no-cache-dir .
 
-# Set the entrypoint for the container
-ENTRYPOINT ["/bin/bash"]
