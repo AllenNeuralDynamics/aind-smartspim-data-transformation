@@ -1,9 +1,9 @@
-name: Lint and run tests
+name: Lint and run tests in dev
 
 on:
   pull_request:
     branches:
-      - main
+      - dev
 
 jobs:
   ci:
