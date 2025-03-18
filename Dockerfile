@@ -13,6 +13,6 @@ COPY pyproject.toml README.md setup.py ./
 COPY src ./src
 
 # Install dependencies
-RUN pip install --no-cache-dir pip setuptools setuptools-scm && \
+RUN pip install --no-cache-dir pip setuptools setuptools-scm awscli && \
     pip install --no-cache-dir .
 
