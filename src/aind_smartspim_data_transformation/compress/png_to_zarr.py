@@ -23,6 +23,7 @@ from ome_zarr.format import CurrentFormat
 from ome_zarr.io import parse_url
 from ome_zarr.writer import write_multiscales_metadata
 from skimage.io import imread as sk_imread
+from zarr.errors import ContainsGroupError
 
 from aind_smartspim_data_transformation.compress.zarr_writer import (
     BlockedArrayWriter,
@@ -498,6 +499,30 @@ def lazy_tiff_reader(
     return Array(dask_arr, name, chunks, dtype)
 
 
+def safe_create_zarr_group(store, path: str = "", **kwargs) -> zarr.Group:
+    """
+    Safe creation of the zarr group.
+
+    Parameters
+    ----------
+    store
+        Zarr store
+    path: str
+        Path to the creation of the zarr group
+        Default: ''
+
+    Returns
+    -------
+    Zarr.group
+        Zarr group pointing to where the data is written
+    """
+    try:
+        return zarr.group(store=store, path=path, overwrite=False, **kwargs)
+    except ContainsGroupError:
+        # Group already exists, which is expected with multiple workers
+        return zarr.open_group(store=store, path=path, mode="r+")
+
+
 def smartspim_channel_zarr_writer(
     image_data: ArrayLike,
     output_path: PathLike,
@@ -567,7 +592,7 @@ def smartspim_channel_zarr_writer(
 
     # Creating Zarr dataset
     store = parse_url(path=output_path, mode="w").store
-    root_group = zarr.group(store=store)
+    root_group = safe_create_zarr_group(store=store)
 
     # Using 1 thread since is in single machine.
     # Avoiding the use of multithreaded due to GIL
