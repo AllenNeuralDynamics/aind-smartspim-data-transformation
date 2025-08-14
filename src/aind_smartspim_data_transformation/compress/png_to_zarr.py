@@ -8,6 +8,8 @@ writes it in OME-Zarr format
 import logging
 import os
 import time
+from contextlib import nullcontext
+from json import JSONDecodeError
 from typing import Dict, Hashable, List, Optional, Sequence, Tuple, Union, cast
 
 import dask
@@ -16,11 +18,9 @@ import numpy as np
 import pims
 import xarray_multiscale
 import zarr
-from filelock import FileLock
-from json import JSONDecodeError
-from contextlib import nullcontext
 from dask.array.core import Array
 from dask.base import tokenize
+from filelock import FileLock
 from numcodecs import blosc
 from ome_zarr.format import CurrentFormat
 from ome_zarr.io import parse_url
@@ -504,12 +504,12 @@ def lazy_tiff_reader(
 
 
 def safe_create_zarr_group(
-        store,
-        path: str = "",
-        with_filelock: bool = False,
-        retries: int = 10,
-        retry_delay: float = 0.1,
-        **kwargs
+    store,
+    path: str = "",
+    with_filelock: bool = False,
+    retries: int = 10,
+    retry_delay: float = 0.1,
+    **kwargs,
 ) -> zarr.Group:
     """
     Safe creation of the zarr group.
@@ -527,7 +527,7 @@ def safe_create_zarr_group(
         Use to handle race conditions.
     retry_delay : float
         Number of seconds to wait before retrying file creation.
-    
+
 
     Returns
     -------
@@ -539,7 +539,7 @@ def safe_create_zarr_group(
         lock_cm = FileLock(f"{store.path}/{path}/.zgroup.lock")
     else:
         lock_cm = nullcontext()
-    
+
     for attempt in range(retries):
         with lock_cm:
             try:
@@ -547,7 +547,9 @@ def safe_create_zarr_group(
                     return zarr.open_group(store, path=path, mode="r+")
                 else:
                     try:
-                        return zarr.group(store, path=path, overwrite=False, **kwargs)
+                        return zarr.group(
+                            store, path=path, overwrite=False, **kwargs
+                        )
                     except ContainsGroupError:
                         return zarr.open_group(store, path=path, mode="r+")
             except JSONDecodeError:
