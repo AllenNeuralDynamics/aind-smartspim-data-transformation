@@ -16,6 +16,9 @@ import numpy as np
 import pims
 import xarray_multiscale
 import zarr
+from filelock import FileLock
+from json import JSONDecodeError
+from contextlib import nullcontext
 from dask.array.core import Array
 from dask.base import tokenize
 from numcodecs import blosc
@@ -500,7 +503,14 @@ def lazy_tiff_reader(
     return Array(dask_arr, name, chunks, dtype)
 
 
-def safe_create_zarr_group(store, path: str = "", **kwargs) -> zarr.Group:
+def safe_create_zarr_group(
+        store,
+        path: str = "",
+        with_filelock: bool = False,
+        retries: int = 10,
+        retry_delay: float = 0.1,
+        **kwargs
+) -> zarr.Group:
     """
     Safe creation of the zarr group.
 
@@ -510,24 +520,41 @@ def safe_create_zarr_group(store, path: str = "", **kwargs) -> zarr.Group:
         Zarr store (e.g., directory, zip file, etc.)
     path : str
         Path to the group inside the store (default: root group)
+    with_filelock : bool
+        If True, lock the .zgroup file to avoid worker race condition
+    retries : int
+        Number of times to retry in the event of JSONDecodeError.
+        Use to handle race conditions.
+    retry_delay : float
+        Number of seconds to wait before retrying file creation.
+    
 
     Returns
     -------
     zarr.Group
         The Zarr group object
     """
-    if contains_group(store, path=path):
-        # Group already exists; open in read/write mode
-        return zarr.open_group(store=store, path=path, mode="r+")
+    if with_filelock:
+        # Use a filelock on the .zgroup file
+        lock_cm = FileLock(f"{store.path}/{path}/.zgroup.lock")
     else:
-        # Attempt to create;
-        # catch race condition where another worker just created it
-        try:
-            return zarr.group(
-                store=store, path=path, overwrite=False, **kwargs
-            )
-        except ContainsGroupError:
-            return zarr.open_group(store=store, path=path, mode="r+")
+        lock_cm = nullcontext()
+    
+    for attempt in range(retries):
+        with lock_cm:
+            try:
+                if contains_group(store, path=path):
+                    return zarr.open_group(store, path=path, mode="r+")
+                else:
+                    try:
+                        return zarr.group(store, path=path, overwrite=False, **kwargs)
+                    except ContainsGroupError:
+                        return zarr.open_group(store, path=path, mode="r+")
+            except JSONDecodeError:
+                if attempt < retries - 1:
+                    time.sleep(retry_delay)
+                    continue
+                raise
 
 
 def smartspim_channel_zarr_writer(
