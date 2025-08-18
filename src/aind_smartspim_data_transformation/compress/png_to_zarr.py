@@ -20,7 +20,7 @@ import xarray_multiscale
 import zarr
 from dask.array.core import Array
 from dask.base import tokenize
-from filelock import FileLock
+from filelock import FileLock, Timeout
 from numcodecs import blosc
 from ome_zarr.format import CurrentFormat
 from ome_zarr.io import parse_url
@@ -536,13 +536,21 @@ def safe_create_zarr_group(
     """
     if with_filelock:
         # Use a filelock on the .zgroup file
-        lock_cm = FileLock(f"{store.path}/{path}/.zgroup.lock")
+        if not hasattr(store, "path"):
+            raise ValueError(
+                "File locking requires a store with a local filesystem path"
+            )
+        lock_path = os.path.join(store.path, path, ".zgroup.lock")
+        lock_cm = FileLock(
+            lock_path,
+            timeout=10  # 10 second timeout on obtaining filelock
+        )
     else:
         lock_cm = nullcontext()
 
     for attempt in range(retries):
-        with lock_cm:
-            try:
+        try:
+            with lock_cm:
                 if contains_group(store, path=path):
                     return zarr.open_group(store, path=path, mode="r+")
                 else:
@@ -552,11 +560,11 @@ def safe_create_zarr_group(
                         )
                     except ContainsGroupError:
                         return zarr.open_group(store, path=path, mode="r+")
-            except JSONDecodeError:
-                if attempt < retries - 1:
-                    time.sleep(retry_delay)
-                    continue
-                raise
+        except (JSONDecodeError, Timeout):
+            if attempt < retries - 1:
+                time.sleep(retry_delay)
+                continue
+            raise
 
 
 def smartspim_channel_zarr_writer(
