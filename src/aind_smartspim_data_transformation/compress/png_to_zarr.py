@@ -8,6 +8,8 @@ writes it in OME-Zarr format
 import logging
 import os
 import time
+from contextlib import nullcontext
+from json import JSONDecodeError
 from typing import Dict, Hashable, List, Optional, Sequence, Tuple, Union, cast
 
 import dask
@@ -18,6 +20,7 @@ import xarray_multiscale
 import zarr
 from dask.array.core import Array
 from dask.base import tokenize
+from filelock import FileLock, Timeout
 from numcodecs import blosc
 from ome_zarr.format import CurrentFormat
 from ome_zarr.io import parse_url
@@ -500,7 +503,14 @@ def lazy_tiff_reader(
     return Array(dask_arr, name, chunks, dtype)
 
 
-def safe_create_zarr_group(store, path: str = "", **kwargs) -> zarr.Group:
+def safe_create_zarr_group(
+    store,
+    path: str = "",
+    with_filelock: bool = False,
+    retries: int = 10,
+    retry_delay: float = 0.1,
+    **kwargs,
+) -> zarr.Group:
     """
     Safe creation of the zarr group.
 
@@ -510,24 +520,51 @@ def safe_create_zarr_group(store, path: str = "", **kwargs) -> zarr.Group:
         Zarr store (e.g., directory, zip file, etc.)
     path : str
         Path to the group inside the store (default: root group)
+    with_filelock : bool
+        If True, lock the .zgroup file to avoid worker race condition
+    retries : int
+        Number of times to retry in the event of JSONDecodeError.
+        Use to handle race conditions.
+    retry_delay : float
+        Number of seconds to wait before retrying file creation.
+
 
     Returns
     -------
     zarr.Group
         The Zarr group object
     """
-    if contains_group(store, path=path):
-        # Group already exists; open in read/write mode
-        return zarr.open_group(store=store, path=path, mode="r+")
-    else:
-        # Attempt to create;
-        # catch race condition where another worker just created it
-        try:
-            return zarr.group(
-                store=store, path=path, overwrite=False, **kwargs
+    if with_filelock:
+        # Use a filelock on the .zgroup file
+        if not hasattr(store, "path"):
+            raise ValueError(
+                "File locking requires a store with a local filesystem path"
             )
-        except ContainsGroupError:
-            return zarr.open_group(store=store, path=path, mode="r+")
+        lock_path = os.path.join(store.path, path, ".zgroup.lock")
+        lock_cm = FileLock(
+            lock_path,
+            timeout=10  # 10 second timeout on obtaining filelock
+        )
+    else:
+        lock_cm = nullcontext()
+
+    for attempt in range(retries):
+        try:
+            with lock_cm:
+                if contains_group(store, path=path):
+                    return zarr.open_group(store, path=path, mode="r+")
+                else:
+                    try:
+                        return zarr.group(
+                            store, path=path, overwrite=False, **kwargs
+                        )
+                    except ContainsGroupError:
+                        return zarr.open_group(store, path=path, mode="r+")
+        except (JSONDecodeError, Timeout):
+            if attempt < retries - 1:
+                time.sleep(retry_delay)
+                continue
+            raise
 
 
 def smartspim_channel_zarr_writer(
