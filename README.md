@@ -9,23 +9,116 @@
 
 
 
-## Usage
- - To use this template, click the green `Use this template` button and `Create new repository`.
- - After github initially creates the new repository, please wait an extra minute for the initialization scripts to finish organizing the repo.
- - To enable the automatic semantic version increments: in the repository go to `Settings` and `Collaborators and teams`. Click the green `Add people` button. Add `svc-aindscicomp` as an admin. Modify the file in `.github/workflows/tag_and_publish.yml` and remove the if statement in line 10. The semantic version will now be incremented every time a code is committed into the main branch.
- - To publish to PyPI, enable semantic versioning and uncomment the publish block in `.github/workflows/tag_and_publish.yml`. The code will now be published to PyPI every time the code is committed into the main branch.
- - The `.github/workflows/test_and_lint.yml` file will run automated tests and style checks every time a Pull Request is opened. If the checks are undesired, the `test_and_lint.yml` can be deleted. The strictness of the code coverage level, etc., can be modified by altering the configurations in the `pyproject.toml` file and the `.flake8` file.
+## Overview
+This package converts SmartSPIM tile stacks (PNG or TIFF) into OME-Zarr
+pyramids, with optional upload to S3. It partitions the work across
+independent stack folders so you can parallelize by running multiple
+partitions at once.
+
+Key capabilities:
+- Read PNG or TIFF stacks and write OME-Zarr pyramids.
+- Derive voxel size from the input acquisition.json metadata.
+- Optional Blosc compression and S3 sync.
+
+## Expected input layout
+Input folders are expected to look like this:
+
+```text
+<input_source>/
+	acquisition.json
+	derivatives/
+		metadata.json
+	SmartSPIM/
+		Ex_445_Em_469/
+			432380/
+				432380_504340/
+					*.png | *.tif | *.tiff
+				432380_530260/
+					*.png | *.tif | *.tiff
+		Ex_561_Em_600/
+			...
+```
+
+Each stack folder (for example `432380_504340`) is processed into an
+OME-Zarr named `<stack_name>.ome.zarr` under the output channel folder.
 
 ## Installation
-To use the software, in the root directory, run
+To use the software, in the root directory, run:
 ```bash
 pip install -e .
 ```
 
-To develop the code, run
+To develop the code, run:
 ```bash
 pip install -e .[dev]
 ```
+
+## Quick start
+Run a single partition locally:
+
+```bash
+python -m aind_smartspim_data_transformation.smartspim_job \
+	--config-file path/to/config.json
+```
+
+Example config:
+
+```json
+{
+	"input_source": "/data/SmartSPIM_000000_2024-06-05_07-56-54",
+	"output_directory": "/data/ome_zarr_output",
+	"num_of_partitions": 4,
+	"partition_to_process": 0,
+	"chunk_size": [128, 128, 128],
+	"scale_factor": [2, 2, 2],
+	"downsample_levels": 4,
+	"compressor_name": "blosc",
+	"compressor_kwargs": {"cname": "zstd", "clevel": 3, "shuffle": 1},
+	"s3_location": null
+}
+```
+
+If `s3_location` is set (for example `s3://bucket/prefix`), the job will
+sync each OME-Zarr to S3 and remove the local copy after upload. The
+`derivatives/` folder is uploaded once by partition 0.
+
+## Environment variables
+You can also configure the job via env vars. These are the keys used in
+the tests and the default `BasicJobSettings` behavior:
+
+```bash
+export TRANSFORMATION_JOB_INPUT_SOURCE=/data/SmartSPIM_000000_2024-06-05_07-56-54
+export TRANSFORMATION_JOB_OUTPUT_DIRECTORY=/data/ome_zarr_output
+export TRANSFORMATION_JOB_NUM_OF_PARTITIONS=4
+export TRANSFORMATION_JOB_PARTITION_TO_PROCESS=0
+```
+
+Then run:
+
+```bash
+python -m aind_smartspim_data_transformation.smartspim_job
+```
+
+## Output layout
+The output directory is organized by channel name, each containing one
+OME-Zarr per stack:
+
+```text
+<output_directory>/
+	Ex_445_Em_469/
+		432380_504340.ome.zarr/
+		432380_530260.ome.zarr/
+	Ex_561_Em_600/
+		432380_504340.ome.zarr/
+		432380_530260.ome.zarr/
+```
+
+## Requirements and notes
+- PNG or TIFF stacks only. Mixed extensions within a stack are not
+	supported.
+- AWS CLI must be installed and configured if using S3 upload.
+- The voxel size is read from `acquisition.json` and assumed to be
+	consistent across the dataset.
 
 ## Contributing
 
