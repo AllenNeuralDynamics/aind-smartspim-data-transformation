@@ -64,7 +64,16 @@ class SmartspimCompressionJob(GenericEtl[SmartspimJobSettings]):
 
     @staticmethod
     def _get_voxel_resolution(acquisition_path: Path) -> List[float]:
-        """Get the voxel resolution from an acquisition.json file."""
+        """Get the voxel resolution from an acquisition.json file.
+
+        Targets aind-data-schema v2 acquisition metadata, where the flat
+        ``tiles`` list was replaced by
+        ``data_streams -> DataStream -> ImagingConfig -> images``. Each
+        ``ImageSPIM`` carries an ``image_to_acquisition_transform`` list that
+        holds a ``Scale`` transform with the ``[x, y, z]`` voxel size in
+        microns. We assume the whole dataset was acquired at the same
+        resolution and read the first image we find.
+        """
 
         if not acquisition_path.is_file():
             raise FileNotFoundError(
@@ -73,14 +82,27 @@ class SmartspimCompressionJob(GenericEtl[SmartspimJobSettings]):
 
         acquisition_config = utils.read_json_as_dict(acquisition_path)
 
-        # Grabbing a tile with metadata from acquisition - we assume all
-        # dataset was acquired with the same resolution
-        tile_coord_transforms = acquisition_config["tiles"][0][
-            "coordinate_transformations"
-        ]
+        # Find the first ImageSPIM across all data streams / imaging configs.
+        # We assume all tiles share the same resolution.
+        image = None
+        for data_stream in acquisition_config.get("data_streams", []):
+            for config in data_stream.get("configurations", []):
+                images = config.get("images")
+                if images:
+                    image = images[0]
+                    break
+            if image is not None:
+                break
 
+        if image is None:
+            raise ValueError(
+                "No image with a coordinate transform found in acquisition "
+                f"file: {acquisition_path}"
+            )
+
+        transforms = image["image_to_acquisition_transform"]
         scale_transform = [
-            x["scale"] for x in tile_coord_transforms if x["type"] == "scale"
+            t["scale"] for t in transforms if t.get("object_type") == "Scale"
         ][0]
 
         x = float(scale_transform[0])
