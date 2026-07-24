@@ -9,16 +9,16 @@ from time import time
 from typing import Any, List, Optional
 
 from aind_data_transformation.core import GenericEtl, JobResponse, get_parser
-from aind_data_transormation.helpers import (
-    _get_voxel_resolution_v1,
-    _get_voxel_resolution_v2,
-    read_json_as_dict,
-)
 from numcodecs.blosc import Blosc
 from packaging import version
 
 from aind_smartspim_data_transformation.compress.png_to_zarr import (
     smartspim_channel_zarr_writer,
+)
+from aind_smartspim_data_transformation.helpers import (
+    _get_voxel_resolution_v1,
+    _get_voxel_resolution_v2,
+    read_json_as_dict,
 )
 from aind_smartspim_data_transformation.io import utils
 from aind_smartspim_data_transformation.io.readers import PngTiffReader
@@ -69,7 +69,7 @@ class SmartspimCompressionJob(GenericEtl[SmartspimJobSettings]):
         )
 
     @staticmethod
-    def get_voxel_resolution(acquisition_path: Path) -> List[float]:
+    def _get_voxel_resolution(acquisition_path: Path) -> List[float]:
         """
         Get the voxel resolution from an acquisition.json file.
 
