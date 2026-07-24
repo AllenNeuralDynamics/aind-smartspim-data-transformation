@@ -542,8 +542,7 @@ def safe_create_zarr_group(
             )
         lock_path = os.path.join(store.path, path, ".zgroup.lock")
         lock_cm = FileLock(
-            lock_path,
-            timeout=10  # 10 second timeout on obtaining filelock
+            lock_path, timeout=10  # 10 second timeout on obtaining filelock
         )
     else:
         lock_cm = nullcontext()
