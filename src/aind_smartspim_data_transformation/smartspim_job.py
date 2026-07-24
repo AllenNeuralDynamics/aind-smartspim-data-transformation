@@ -66,13 +66,23 @@ class SmartspimCompressionJob(GenericEtl[SmartspimJobSettings]):
     def _get_voxel_resolution(acquisition_path: Path) -> List[float]:
         """Get the voxel resolution from an acquisition.json file.
 
-        Targets aind-data-schema v2 acquisition metadata, where the flat
-        ``tiles`` list was replaced by
-        ``data_streams -> DataStream -> ImagingConfig -> images``. Each
-        ``ImageSPIM`` carries an ``image_to_acquisition_transform`` list that
-        holds a ``Scale`` transform with the ``[x, y, z]`` voxel size in
-        microns. We assume the whole dataset was acquired at the same
-        resolution and read the first image we find.
+        Supports both acquisition schema layouts to cover the transition to
+        aind-data-schema v2, dispatching on the file's structure:
+
+        * **aind-data-schema v2** (current): the flat ``tiles`` list was
+          replaced by ``data_streams -> DataStream -> ImagingConfig ->
+          images``, where each ``ImageSPIM`` carries an
+          ``image_to_acquisition_transform`` holding a ``Scale`` transform.
+        * **legacy** (pre-v2): a flat ``tiles`` list whose entries hold
+          ``coordinate_transformations`` with a ``scale`` entry.
+
+        Dispatch is on structure (presence of ``data_streams`` vs ``tiles``)
+        rather than the ``schema_version`` string, because that directly tests
+        the layout we are about to read; ``schema_version`` is logged for
+        traceability. In both layouts the ``Scale`` is ``[x, y, z]`` in
+        microns; we assume the whole dataset was acquired at the same
+        resolution and read the first tile/image we find, returning
+        ``[z, y, x]``.
         """
 
         if not acquisition_path.is_file():
@@ -81,9 +91,47 @@ class SmartspimCompressionJob(GenericEtl[SmartspimJobSettings]):
             )
 
         acquisition_config = utils.read_json_as_dict(acquisition_path)
+        schema_version = acquisition_config.get("schema_version", "unknown")
 
-        # Find the first ImageSPIM across all data streams / imaging configs.
-        # We assume all tiles share the same resolution.
+        if "data_streams" in acquisition_config:
+            logging.info(
+                f"Reading v2 acquisition (schema_version={schema_version}): "
+                f"{acquisition_path}"
+            )
+            scale_transform = SmartspimCompressionJob._get_scale_v2(
+                acquisition_config, acquisition_path
+            )
+        elif "tiles" in acquisition_config:
+            logging.info(
+                "Reading legacy acquisition "
+                f"(schema_version={schema_version}): {acquisition_path}"
+            )
+            scale_transform = SmartspimCompressionJob._get_scale_legacy(
+                acquisition_config
+            )
+        else:
+            raise ValueError(
+                "Unrecognized acquisition schema (no 'data_streams' or "
+                f"'tiles' key, schema_version={schema_version}) in file: "
+                f"{acquisition_path}"
+            )
+
+        x = float(scale_transform[0])
+        y = float(scale_transform[1])
+        z = float(scale_transform[2])
+
+        return [z, y, x]
+
+    @staticmethod
+    def _get_scale_v2(
+        acquisition_config: dict, acquisition_path: Path
+    ) -> List[float]:
+        """Read the ``[x, y, z]`` scale from a v2 acquisition config.
+
+        Walks ``data_streams -> configurations -> images`` and returns the
+        ``Scale`` transform of the first ``ImageSPIM`` found. We assume all
+        tiles share the same resolution.
+        """
         image = None
         for data_stream in acquisition_config.get("data_streams", []):
             for config in data_stream.get("configurations", []):
@@ -101,15 +149,23 @@ class SmartspimCompressionJob(GenericEtl[SmartspimJobSettings]):
             )
 
         transforms = image["image_to_acquisition_transform"]
-        scale_transform = [
+        return [
             t["scale"] for t in transforms if t.get("object_type") == "Scale"
         ][0]
 
-        x = float(scale_transform[0])
-        y = float(scale_transform[1])
-        z = float(scale_transform[2])
-
-        return [z, y, x]
+    @staticmethod
+    def _get_scale_legacy(acquisition_config: dict) -> List[float]:
+        """Read the ``[x, y, z]`` scale from a legacy (pre-v2) acquisition
+        config, using the first tile's ``coordinate_transformations``. We
+        assume all tiles share the same resolution."""
+        tile_coord_transforms = acquisition_config["tiles"][0][
+            "coordinate_transformations"
+        ]
+        return [
+            t["scale"]
+            for t in tile_coord_transforms
+            if t["type"] == "scale"
+        ][0]
 
     def _get_compressor(self) -> Optional[Blosc]:
         """
