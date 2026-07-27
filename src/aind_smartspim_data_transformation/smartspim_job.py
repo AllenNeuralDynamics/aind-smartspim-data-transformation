@@ -10,9 +10,15 @@ from typing import Any, List, Optional
 
 from aind_data_transformation.core import GenericEtl, JobResponse, get_parser
 from numcodecs.blosc import Blosc
+from packaging import version
 
 from aind_smartspim_data_transformation.compress.png_to_zarr import (
     smartspim_channel_zarr_writer,
+)
+from aind_smartspim_data_transformation.helpers import (
+    _get_voxel_resolution_v1,
+    _get_voxel_resolution_v2,
+    read_json_as_dict,
 )
 from aind_smartspim_data_transformation.io import utils
 from aind_smartspim_data_transformation.io.readers import PngTiffReader
@@ -64,30 +70,32 @@ class SmartspimCompressionJob(GenericEtl[SmartspimJobSettings]):
 
     @staticmethod
     def _get_voxel_resolution(acquisition_path: Path) -> List[float]:
-        """Get the voxel resolution from an acquisition.json file."""
+        """
+        Get the voxel resolution from an acquisition.json file.
 
-        if not acquisition_path.is_file():
+        Parameters
+        ----------
+        acquisition_path: Path
+            Path to the acquisition.json file.
+        Returns
+        -------
+        List[float]
+            Voxel resolution in the format [z, y, x].
+        """
+        if not Path(acquisition_path).is_file():
             raise FileNotFoundError(
                 f"acquisition.json file not found at: {acquisition_path}"
             )
 
-        acquisition_config = utils.read_json_as_dict(acquisition_path)
+        acquisition_config = read_json_as_dict(str(acquisition_path))
 
-        # Grabbing a tile with metadata from acquisition - we assume all
-        # dataset was acquired with the same resolution
-        tile_coord_transforms = acquisition_config["tiles"][0][
-            "coordinate_transformations"
-        ]
+        schema_version = acquisition_config.get("schema_version")
+        print(f"Schema version: {schema_version}")
 
-        scale_transform = [
-            x["scale"] for x in tile_coord_transforms if x["type"] == "scale"
-        ][0]
-
-        x = float(scale_transform[0])
-        y = float(scale_transform[1])
-        z = float(scale_transform[2])
-
-        return [z, y, x]
+        if version.parse(schema_version) >= version.parse("2.0.0"):
+            return _get_voxel_resolution_v2(acquisition_config)
+        else:
+            return _get_voxel_resolution_v1(acquisition_config)
 
     def _get_compressor(self) -> Optional[Blosc]:
         """
