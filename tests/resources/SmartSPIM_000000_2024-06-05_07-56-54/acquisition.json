@@ -127,26 +127,26 @@
                ],
                "coordinate_system": {
                   "object_type": "Coordinate system",
-                  "name": "SPIM_RPI",
+                  "name": "SPIM_IAR",
                   "origin": "Origin",
                   "axes": [
                      {
                         "object_type": "Axis",
-                        "name": "X",
-                        "direction": "Left_to_right"
+                        "name": "Z",
+                        "direction": "Superior_to_inferior"
                      },
                      {
                         "object_type": "Axis",
                         "name": "Y",
-                        "direction": "Anterior_to_posterior"
+                        "direction": "Posterior_to_anterior"
                      },
                      {
                         "object_type": "Axis",
-                        "name": "Z",
-                        "direction": "Superior_to_inferior"
+                        "name": "X",
+                        "direction": "Left_to_right"
                      }
                   ],
-                  "axis_unit": "millimeter"
+                  "axis_unit": "micrometer"
                },
                "images": [
                   {
@@ -157,17 +157,17 @@
                         {
                            "object_type": "Scale",
                            "scale": [
+                              2.0,
                               1.8,
-                              1.8,
-                              2.0
+                              1.8
                            ]
                         },
                         {
                            "object_type": "Translation",
                            "translation": [
-                              43238.0,
+                              97.7,
                               50434.0,
-                              97.7
+                              43238.0
                            ]
                         }
                      ],
@@ -186,17 +186,17 @@
                         {
                            "object_type": "Scale",
                            "scale": [
+                              2.0,
                               1.8,
-                              1.8,
-                              2.0
+                              1.8
                            ]
                         },
                         {
                            "object_type": "Translation",
                            "translation": [
-                              43238.0,
+                              97.7,
                               53026.0,
-                              97.7
+                              43238.0
                            ]
                         }
                      ],
@@ -215,17 +215,17 @@
                         {
                            "object_type": "Scale",
                            "scale": [
+                              2.0,
                               1.8,
-                              1.8,
-                              2.0
+                              1.8
                            ]
                         },
                         {
                            "object_type": "Translation",
                            "translation": [
-                              46478.0,
+                              97.7,
                               50434.0,
-                              97.7
+                              46478.0
                            ]
                         }
                      ],
@@ -244,17 +244,17 @@
                         {
                            "object_type": "Scale",
                            "scale": [
+                              2.0,
                               1.8,
-                              1.8,
-                              2.0
+                              1.8
                            ]
                         },
                         {
                            "object_type": "Translation",
                            "translation": [
-                              46478.0,
+                              97.7,
                               53026.0,
-                              97.7
+                              46478.0
                            ]
                         }
                      ],
@@ -273,17 +273,17 @@
                         {
                            "object_type": "Scale",
                            "scale": [
+                              2.0,
                               1.8,
-                              1.8,
-                              2.0
+                              1.8
                            ]
                         },
                         {
                            "object_type": "Translation",
                            "translation": [
-                              43238.0,
+                              97.7,
                               50434.0,
-                              97.7
+                              43238.0
                            ]
                         }
                      ],
@@ -302,17 +302,17 @@
                         {
                            "object_type": "Scale",
                            "scale": [
+                              2.0,
                               1.8,
-                              1.8,
-                              2.0
+                              1.8
                            ]
                         },
                         {
                            "object_type": "Translation",
                            "translation": [
-                              43238.0,
+                              97.7,
                               53026.0,
-                              97.7
+                              43238.0
                            ]
                         }
                      ],
@@ -331,17 +331,17 @@
                         {
                            "object_type": "Scale",
                            "scale": [
+                              2.0,
                               1.8,
-                              1.8,
-                              2.0
+                              1.8
                            ]
                         },
                         {
                            "object_type": "Translation",
                            "translation": [
-                              46478.0,
+                              97.7,
                               50434.0,
-                              97.7
+                              46478.0
                            ]
                         }
                      ],
@@ -360,17 +360,17 @@
                         {
                            "object_type": "Scale",
                            "scale": [
+                              2.0,
                               1.8,
-                              1.8,
-                              2.0
+                              1.8
                            ]
                         },
                         {
                            "object_type": "Translation",
                            "translation": [
-                              46478.0,
+                              97.7,
                               53026.0,
-                              97.7
+                              46478.0
                            ]
                         }
                      ],
