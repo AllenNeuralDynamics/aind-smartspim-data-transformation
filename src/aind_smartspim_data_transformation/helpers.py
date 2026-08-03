@@ -102,8 +102,10 @@ def _get_voxel_resolution_v2(acquisition_config: dict) -> List[float]:
         if x["object_type"] == "Scale"
     ][0]
 
-    x = float(scale_transform[0])
+    # v2 acquisitions store the Scale in data-array (Z, Y, X) order to match
+    # the coordinate system axes, so it is already in the returned order.
+    z = float(scale_transform[0])
     y = float(scale_transform[1])
-    z = float(scale_transform[2])
+    x = float(scale_transform[2])
 
     return [z, y, x]
