@@ -2,6 +2,7 @@
 
 import json
 import os
+import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import MagicMock, patch
@@ -77,6 +78,27 @@ class SmartspimCompressionTest(unittest.TestCase):
         acq_path = DATA_DIR / "acquisition.json"
         voxel_res = self.basic_job._get_voxel_resolution(acq_path)
         expected_res = [2.0, 1.8, 1.8]
+        self.assertEqual(expected_res, voxel_res)
+
+    def test_get_voxel_resolution_legacy(self):
+        """Tests _get_voxel_resolution reads the legacy (pre-v2) schema"""
+        legacy = {
+            "schema_version": "0.4.6",
+            "tiles": [
+                {
+                    "coordinate_transformations": [
+                        {"type": "translation", "translation": [1, 2, 3]},
+                        {"type": "scale", "scale": [1.8, 1.8, 2.0]},
+                    ]
+                }
+            ],
+        }
+        with tempfile.TemporaryDirectory() as tmp:
+            acq_path = Path(tmp) / "acquisition.json"
+            with open(acq_path, "w") as f:
+                json.dump(legacy, f)
+            voxel_res = self.basic_job._get_voxel_resolution(acq_path)
+        expected_res = [2.0, 1.8, 1.8]  # (z, y, x)
         self.assertEqual(expected_res, voxel_res)
 
     def test_get_voxel_resolution_error(self):
